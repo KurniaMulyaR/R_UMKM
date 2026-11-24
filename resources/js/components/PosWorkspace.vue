@@ -1,0 +1,198 @@
+<script setup>
+import { computed, ref, watch } from 'vue';
+
+const props = defineProps({
+    catalog: { type: Array, default: () => [] },
+    customers: { type: Array, default: () => [] },
+    checkoutUrl: { type: String, required: true },
+    csrfToken: { type: String, required: true },
+    shiftOpen: { type: Boolean, default: false },
+    shiftOpenedAt: { type: String, default: '' },
+    productsUrl: { type: String, default: '/products' },
+    shiftsUrl: { type: String, default: '/shifts' },
+});
+
+const { catalog, customers, checkoutUrl, csrfToken, shiftOpen, shiftOpenedAt, productsUrl, shiftsUrl } = props;
+
+const search = ref('');
+const activeCategory = ref('Semua');
+const cart = ref([]);
+const discount = ref(0);
+const customerId = ref('');
+const cashReceived = ref(0);
+const notes = ref('');
+const payments = ref([{ method: 'cash', amount: 0 }]);
+const message = ref('');
+const searchInput = ref(null);
+
+const categories = computed(() => ['Semua', ...new Set(props.catalog.map((item) => item.category_name || 'Umum'))]);
+const filteredProducts = computed(() => {
+    const query = search.value.trim().toLocaleLowerCase('id-ID');
+    return props.catalog.filter((item) => {
+        const matchesCategory = activeCategory.value === 'Semua' || (item.category_name || 'Umum') === activeCategory.value;
+        const searchable = `${item.name} ${item.sku} ${item.barcode || ''}`.toLocaleLowerCase('id-ID');
+        return matchesCategory && (!query || searchable.includes(query));
+    });
+});
+const subtotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0));
+const discountValue = computed(() => Math.min(Math.max(0, Number(discount.value) || 0), subtotal.value));
+const total = computed(() => Math.max(0, subtotal.value - discountValue.value));
+const itemCount = computed(() => cart.value.reduce((sum, item) => sum + Number(item.quantity), 0));
+const paymentTotal = computed(() => payments.value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
+const cashTotal = computed(() => payments.value.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
+const change = computed(() => Math.max(0, Number(cashReceived.value || 0) - cashTotal.value));
+watch(total, (value) => { if (payments.value.length === 1) payments.value[0].amount = value; });
+const hasCredit = computed(() => payments.value.some((payment) => payment.method === 'credit'));
+const canSubmit = computed(() => props.shiftOpen && cart.value.length > 0 && total.value > 0
+    && Math.round(paymentTotal.value * 100) === Math.round(total.value * 100)
+    && cashTotal.value <= Number(cashReceived.value || 0)
+    && (!hasCredit.value || Boolean(customerId.value)));
+
+function formatRupiah(value) {
+    return `Rp ${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0))}`;
+}
+
+function addProduct(product) {
+    message.value = '';
+    const current = cart.value.find((item) => item.variant_id === product.variant_id);
+    if (product.track_stock && (Number(current?.quantity || 0) + 1) > Number(product.stock || 0)) {
+        message.value = `Stok ${product.name} tersisa ${product.stock}.`;
+        return;
+    }
+    if (current) {
+        current.quantity += 1;
+    } else {
+        cart.value.push({ ...product, quantity: 1 });
+    }
+    syncSinglePayment();
+}
+
+function setQuantity(item, value) {
+    const quantity = Number(value);
+    if (!quantity || quantity <= 0) {
+        removeItem(item.variant_id);
+        return;
+    }
+    if (item.track_stock && quantity > Number(item.stock || 0)) {
+        message.value = `Stok ${item.name} hanya ${item.stock}.`;
+        return;
+    }
+    message.value = '';
+    item.quantity = quantity;
+    syncSinglePayment();
+}
+
+function removeItem(variantId) {
+    cart.value = cart.value.filter((item) => item.variant_id !== variantId);
+    syncSinglePayment();
+}
+
+function syncSinglePayment() {
+    if (payments.value.length === 1) payments.value[0].amount = total.value;
+}
+
+function addPayment() {
+    if (payments.value.length >= 4) return;
+    payments.value.push({ method: 'bank_transfer', amount: Math.max(0, total.value - paymentTotal.value) });
+}
+
+function removePayment(index) {
+    payments.value.splice(index, 1);
+    syncSinglePayment();
+}
+
+function changePaymentMethod(payment) {
+    message.value = '';
+    if (payments.value.length === 1) syncSinglePayment();
+}
+
+function scanBarcode() {
+    const barcode = search.value.trim();
+    const product = props.catalog.find((item) => item.barcode && item.barcode === barcode);
+    if (product) {
+        addProduct(product);
+        search.value = '';
+        activeCategory.value = 'Semua';
+    }
+}
+
+function validateCheckout(event) {
+    if (!canSubmit.value) {
+        event.preventDefault();
+        if (!props.shiftOpen) message.value = 'Buka shift kasir sebelum menyimpan transaksi.';
+        else if (!cart.value.length) message.value = 'Pilih produk untuk memulai transaksi.';
+        else if (hasCredit.value && !customerId.value) message.value = 'Pilih pelanggan untuk pembayaran kasbon.';
+        else if (cashTotal.value > Number(cashReceived.value || 0)) message.value = 'Uang tunai diterima belum cukup.';
+        else message.value = 'Jumlah metode pembayaran harus sama dengan total transaksi.';
+    }
+}
+</script>
+
+<template>
+    <div class="page-heading pos-page-heading">
+        <div><div class="eyebrow">RUANG TRANSAKSI</div><h1>Kasir</h1><p>Catat penjualan anggota dan pelanggan dengan mudah.</p></div>
+        <span v-if="shiftOpen" class="shift-open-chip"><i></i> Shift aktif <span v-if="shiftOpenedAt">· {{ shiftOpenedAt }}</span></span>
+        <a v-else :href="shiftsUrl" class="btn btn-soft">Buka shift <span>→</span></a>
+    </div>
+
+    <div v-if="!shiftOpen" class="shift-banner coop-shift-banner"><span><b>Shift kasir belum dibuka.</b> Buka shift untuk mulai mencatat transaksi.</span><a :href="shiftsUrl" class="btn btn-primary">Buka shift <span>→</span></a></div>
+
+    <div class="pos-shell coop-pos-shell">
+        <section class="pos-main">
+            <div class="pos-tools">
+                <label class="pos-search coop-search"><span aria-hidden="true">⌕</span><input ref="searchInput" v-model="search" placeholder="Cari nama, SKU, atau scan barcode" autocomplete="off" @keydown.enter.prevent="scanBarcode"><button v-if="search" class="clear-search" type="button" @click="search = ''; searchInput?.focus()">×</button></label>
+                <div class="catalog-hint"><span class="scan-dot"></span> Scan barcode lalu tekan Enter</div>
+            </div>
+            <div class="category-pills" aria-label="Kategori produk">
+                <button v-for="category in categories" :key="category" type="button" class="pill" :class="{ active: activeCategory === category }" @click="activeCategory = category">{{ category }}</button>
+            </div>
+            <div class="product-grid coop-product-grid">
+                <button v-for="product in filteredProducts" :key="product.variant_id" type="button" class="product-tile coop-product-tile" :disabled="product.track_stock && Number(product.stock) <= 0" @click="addProduct(product)">
+                    <span class="product-color">{{ product.name.slice(0, 1).toLocaleUpperCase('id-ID') }}</span>
+                    <span class="product-name">{{ product.name }}</span>
+                    <span class="product-meta">{{ product.sku }} · {{ product.category_name || 'Umum' }}</span>
+                    <span class="product-bottom"><b>{{ formatRupiah(product.price) }}</b><small>{{ product.track_stock ? `${new Intl.NumberFormat('id-ID').format(product.stock)} ${product.unit_symbol}` : 'Jasa' }}</small></span>
+                </button>
+                <div v-if="!filteredProducts.length" class="card empty-state catalog-empty"><div class="empty-icon">⌕</div><b>{{ catalog.length ? 'Produk belum ditemukan' : 'Belum ada produk untuk dijual' }}</b><span>{{ catalog.length ? 'Coba kata kunci atau kategori yang lain.' : 'Tambahkan produk dan harga jual terlebih dahulu.' }}</span><a v-if="!catalog.length" class="btn btn-primary" :href="productsUrl">Kelola produk</a></div>
+            </div>
+            <div v-if="message" class="pos-message" role="status"><span>!</span>{{ message }}<button type="button" aria-label="Tutup pesan" @click="message = ''">×</button></div>
+        </section>
+
+        <aside class="card cart-card coop-cart-card">
+            <div class="cart-head"><div><small class="cart-overline">RINGKASAN</small><h2>Keranjang</h2></div><span class="cart-count">{{ itemCount }} barang</span></div>
+            <div class="cart-lines">
+                <div v-for="item in cart" :key="item.variant_id" class="cart-line coop-cart-line">
+                    <div class="cart-item-info"><b>{{ item.name }}</b><small>{{ formatRupiah(item.price) }} / {{ item.unit_symbol }}</small><strong>{{ formatRupiah(item.price * item.quantity) }}</strong></div>
+                    <input class="qty-input" type="number" min="0.0001" step="0.0001" :max="item.track_stock ? item.stock : undefined" :value="item.quantity" :aria-label="`Jumlah ${item.name}`" @change="setQuantity(item, $event.target.value)">
+                    <button class="remove-line" type="button" :aria-label="`Hapus ${item.name}`" @click="removeItem(item.variant_id)">×</button>
+                </div>
+                <div v-if="!cart.length" class="cart-empty"><span class="basket-illustration">♧</span><b>Keranjang masih kosong</b><span>Pilih barang untuk mulai mencatat transaksi.</span></div>
+            </div>
+
+            <form method="post" :action="checkoutUrl" class="pos-checkout coop-checkout" @submit="validateCheckout">
+                <input type="hidden" name="_token" :value="csrfToken">
+                <template v-for="(item, index) in cart" :key="item.variant_id">
+                    <input type="hidden" :name="`items[${index}][variant_id]`" :value="item.variant_id">
+                    <input type="hidden" :name="`items[${index}][quantity]`" :value="item.quantity">
+                </template>
+                <div class="cart-totals"><div class="total-row"><span>Subtotal</span><b>{{ formatRupiah(subtotal) }}</b></div><label>Potongan harga<input v-model.number="discount" name="discount" type="number" min="0" :max="subtotal" step="1" placeholder="0"></label><div v-if="discountValue" class="total-row discount-row"><span>Diskon</span><b>− {{ formatRupiah(discountValue) }}</b></div><div class="total-row grand"><span>Total belanja</span><b>{{ formatRupiah(total) }}</b></div></div>
+                <div class="checkout-fields">
+                    <label>Pelanggan <span class="optional">wajib untuk kasbon</span><select v-model="customerId" name="customer_id"><option value="">Pelanggan umum</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}{{ customer.phone ? ` · ${customer.phone}` : '' }}</option></select></label>
+                    <div class="pay-actions"><label>Metode pembayaran</label><button type="button" class="small-link" :disabled="payments.length >= 4" @click="addPayment">＋ Split bayar</button></div>
+                    <div class="payment-stack">
+                        <div v-for="(payment, index) in payments" :key="index" class="payment-row">
+                            <select v-model="payment.method" :name="`payments[${index}][method]`" :aria-label="`Metode pembayaran ${index + 1}`" @change="changePaymentMethod(payment)"><option value="cash">Tunai</option><option value="bank_transfer">Transfer bank</option><option value="qris_external">QRIS</option><option value="credit">Kasbon</option></select>
+                            <input v-model.number="payment.amount" :name="`payments[${index}][amount]`" type="number" min="0.01" step="1" :aria-label="`Nominal pembayaran ${index + 1}`" required>
+                            <button v-if="payments.length > 1" type="button" :aria-label="`Hapus metode bayar ${index + 1}`" @click="removePayment(index)">×</button>
+                        </div>
+                    </div>
+                    <label>Uang tunai diterima<input v-model.number="cashReceived" name="cash_received" type="number" min="0" step="1" placeholder="0"></label>
+                    <div class="total-row change-row"><span>Kembalian</span><b>{{ formatRupiah(change) }}</b></div>
+                    <label>Catatan <span class="optional">opsional</span><input v-model="notes" name="notes" maxlength="1000" placeholder="Catatan transaksi"></label>
+                    <button class="btn btn-primary btn-block coop-submit" type="submit" :disabled="!canSubmit">Simpan transaksi <span>→</span></button>
+                    <p v-if="hasCredit && !customerId" class="checkout-note">Pilih pelanggan agar transaksi kasbon tercatat.</p>
+                </div>
+            </form>
+        </aside>
+    </div>
+</template>

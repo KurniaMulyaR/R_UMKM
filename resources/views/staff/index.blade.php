@@ -1,0 +1,10 @@
+@extends('layouts.app')
+@section('title','Tim')
+@section('crumb','Tim')
+@section('content')
+<div class="page-heading"><div><div class="eyebrow">AKSES PENGGUNA</div><h1>Tim usaha</h1><p>Tambahkan akun kasir atau staf. Kata sandi awal dibagikan langsung ke orangnya.</p></div></div>
+@if($currentRole->key === 'owner')
+<div class="card form-card"><h2>Tambah akun staf</h2><form method="post" action="{{ route('staff.store') }}">@csrf<div class="form-grid"><label>Nama lengkap<input name="name" value="{{ old('name') }}" required maxlength="120"></label><label>Nomor HP untuk masuk<input name="phone" value="{{ old('phone') }}" required maxlength="32" placeholder="08xx"></label><label>Email <span class="optional">opsional</span><input type="email" name="email" value="{{ old('email') }}" maxlength="190"></label><label>Peran<select name="role" required><option value="cashier">Kasir</option><option value="warehouse">Admin gudang</option><option value="manager">Manajer</option></select></label><label>Kata sandi awal<input type="password" name="password" minlength="8" required autocomplete="new-password"></label><label>Ulangi kata sandi<input type="password" name="password_confirmation" minlength="8" required autocomplete="new-password"></label></div><div class="form-actions"><button class="btn btn-primary">Buat akun staf</button></div></form></div>
+@endif
+<div class="card section-card"><div class="section-title"><h2>Pengguna aktif</h2><span class="status">{{ $staff->count() }} akun</span></div><div class="table-wrap"><table><thead><tr><th>NAMA</th><th>NOMOR HP</th><th>EMAIL</th><th>PERAN</th><th>TERAKHIR MASUK</th></tr></thead><tbody>@forelse($staff as $person)<tr><td class="td-main">{{ $person->name }}</td><td>{{ $person->phone }}</td><td>{{ $person->email ?: '—' }}</td><td><span class="status">{{ $person->role_name }}</span></td><td>{{ $person->last_login_at ? \Illuminate\Support\Carbon::parse($person->last_login_at)->format('d M Y, H:i') : 'Belum masuk' }}</td></tr>@empty<tr><td colspan="5" class="muted">Belum ada akun di usaha ini.</td></tr>@endforelse</tbody></table></div></div>
+@endsection
