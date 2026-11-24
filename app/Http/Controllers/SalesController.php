@@ -105,6 +105,32 @@ class SalesController extends Controller
             }
 
             $paymentIds = DB::table('payment_allocations')->where('tenant_id', $tenant->id)->where('sale_id', $sale->id)->pluck('payment_id');
+
+            // Penerimaan kasbon yang masuk setelah penjualan juga dibalik; kalau tidak, piutang 1200 jadi bersaldo kredit
+            // dan kas tetap tercatat padahal transaksinya sudah dibatalkan.
+            $receiptEntries = DB::table('journal_entries')->where('tenant_id', $tenant->id)->where('source_type', 'payment')
+                ->whereIn('source_id', $paymentIds)->where('status', 'posted')->get();
+            foreach ($receiptEntries as $receipt) {
+                $receiptReversalId = (string) Str::uuid();
+                DB::table('journal_entries')->insert([
+                    'id' => $receiptReversalId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
+                    'entry_number' => 'RV-'.$receipt->entry_number, 'entry_date' => $now->toDateString(), 'status' => 'posted',
+                    'description' => 'Pembatalan '.$receipt->description, 'source_type' => 'payment_void', 'source_id' => $receipt->source_id,
+                    'idempotency_key' => 'payment:'.$receipt->source_id.':reversal', 'posted_at' => $now,
+                    'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'reversal_of_entry_id' => $receipt->id,
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+                foreach (DB::table('journal_lines')->where('journal_entry_id', $receipt->id)->get() as $line) {
+                    DB::table('journal_lines')->insert([
+                        'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $receiptReversalId,
+                        'account_id' => $line->account_id, 'outlet_id' => $line->outlet_id, 'customer_id' => $line->customer_id,
+                        'supplier_id' => $line->supplier_id, 'product_variant_id' => $line->product_variant_id,
+                        'description' => 'Pembalik: '.$line->description, 'debit' => $line->credit, 'credit' => $line->debit,
+                        'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                }
+                DB::table('journal_entries')->where('id', $receipt->id)->update(['status' => 'reversed', 'updated_at' => $now]);
+            }
             DB::table('payments')->whereIn('id', $paymentIds)->whereIn('status', ['confirmed', 'pending'])->update(['status' => 'reversed', 'updated_at' => $now]);
             DB::table('sales')->where('id', $sale->id)->update([
                 'status' => 'voided', 'paid_total' => 0, 'voided_at' => $now, 'voided_by_user_id' => auth()->id(),

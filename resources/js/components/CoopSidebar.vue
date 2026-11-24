@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue';
+import Icon from './Icon.vue';
 
 const props = defineProps({
     businessName: { type: String, default: 'Usaha Bersama' },
@@ -47,20 +48,20 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape));
                 <span class="brand-mark"><span>R</span></span>
                 <span class="brand-copy"><b>R Kasir</b><small>Koperasi & usaha lokal</small></span>
             </a>
-            <button class="sidebar-collapse" type="button" aria-label="Ciutkan atau lebarkan navigasi" title="Ciutkan atau lebarkan navigasi" @click="toggleCollapsed">‹</button>
+            <button class="sidebar-collapse" type="button" aria-label="Ciutkan atau lebarkan navigasi" title="Ciutkan atau lebarkan navigasi" @click="toggleCollapsed"><Icon name="chevronLeft" /></button>
         </div>
 
         <div class="store-switch">
-            <span class="store-emblem" aria-hidden="true">♧</span>
+            <span class="store-emblem" aria-hidden="true"><Icon name="pos" /></span>
             <span class="store-copy"><small>RUANG USAHA</small><b>{{ businessName }}</b><span>{{ outletName }}</span></span>
-            <span class="chevron" aria-hidden="true">⌄</span>
+            <span class="chevron" aria-hidden="true"><Icon name="chevronDown" /></span>
         </div>
 
         <div v-for="group in groups" :key="group.name" class="nav-group">
             <div class="nav-label">{{ group.name }}</div>
             <nav class="nav-list" :aria-label="group.name">
                 <a v-for="link in group.links" :key="link.label" :href="link.href" class="nav-link" :class="{ active: link.active }" :aria-current="link.active ? 'page' : undefined" :title="link.label" @click="closeMenu">
-                    <span class="nav-icon" aria-hidden="true">{{ link.icon }}</span>
+                    <span class="nav-icon" aria-hidden="true"><Icon :name="link.icon" /></span>
                     <span>{{ link.label }}</span>
                     <kbd v-if="link.shortcut">{{ link.shortcut }}</kbd>
                 </a>
@@ -68,11 +69,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape));
         </div>
 
         <div class="sidebar-bottom">
-            <div class="help-card"><span class="help-mark" aria-hidden="true">✳</span><div><b>Usaha tumbuh bersama</b><span>Catatan kas dan stok tersimpan rapi setiap hari.</span></div></div>
+            <div class="help-card"><span class="help-mark" aria-hidden="true"><Icon name="spark" /></span><div><b>Usaha tumbuh bersama</b><span>Catatan kas dan stok tersimpan rapi setiap hari.</span></div></div>
             <div class="profile-row">
                 <span class="avatar">{{ userName.slice(0, 1).toUpperCase() }}</span>
                 <span class="profile-name"><b>{{ userName }}</b><small>{{ roleName }}</small></span>
-                <form method="post" :action="logoutUrl"><input type="hidden" name="_token" :value="logoutToken"><button class="icon-button" title="Keluar" aria-label="Keluar">↪</button></form>
+                <form method="post" :action="logoutUrl"><input type="hidden" name="_token" :value="logoutToken"><button class="icon-button" title="Keluar" aria-label="Keluar"><Icon name="logout" /></button></form>
             </div>
         </div>
     </aside>

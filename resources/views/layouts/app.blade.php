@@ -1,17 +1,17 @@
 <!doctype html>
 @php
     $sidebarLinks = [
-        ['group' => 'RINGKASAN', 'label' => 'Ringkasan', 'href' => route('dashboard'), 'icon' => '⌂', 'active' => request()->routeIs('dashboard')],
-        ['group' => 'OPERASIONAL', 'label' => 'Kasir', 'href' => route('pos.index'), 'icon' => '▦', 'active' => request()->routeIs('pos.*'), 'shortcut' => 'F2'],
-        ['group' => 'OPERASIONAL', 'label' => 'Penjualan', 'href' => route('sales.index'), 'icon' => '↗', 'active' => request()->routeIs('sales.*')],
-        ['group' => 'OPERASIONAL', 'label' => 'Shift kasir', 'href' => route('shifts.index'), 'icon' => '◷', 'active' => request()->routeIs('shifts.*')],
-        ['group' => 'DATA USAHA', 'label' => 'Produk & persediaan', 'href' => route('products.index'), 'icon' => '□', 'active' => request()->routeIs('products.*')],
-        ['group' => 'DATA USAHA', 'label' => 'Anggota & pelanggan', 'href' => route('customers.index'), 'icon' => '♙', 'active' => request()->routeIs('customers.*')],
+        ['group' => 'RINGKASAN', 'label' => 'Ringkasan', 'href' => route('dashboard'), 'icon' => 'home', 'active' => request()->routeIs('dashboard')],
+        ['group' => 'OPERASIONAL', 'label' => 'Kasir', 'href' => route('pos.index'), 'icon' => 'pos', 'active' => request()->routeIs('pos.*'), 'shortcut' => 'F2'],
+        ['group' => 'OPERASIONAL', 'label' => 'Penjualan', 'href' => route('sales.index'), 'icon' => 'sales', 'active' => request()->routeIs('sales.*')],
+        ['group' => 'OPERASIONAL', 'label' => 'Shift kasir', 'href' => route('shifts.index'), 'icon' => 'clock', 'active' => request()->routeIs('shifts.*')],
+        ['group' => 'DATA USAHA', 'label' => 'Produk & persediaan', 'href' => route('products.index'), 'icon' => 'box', 'active' => request()->routeIs('products.*')],
+        ['group' => 'DATA USAHA', 'label' => 'Anggota & pelanggan', 'href' => route('customers.index'), 'icon' => 'users', 'active' => request()->routeIs('customers.*')],
     ];
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
-        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Tim usaha', 'href' => route('staff.index'), 'icon' => '♧', 'active' => request()->routeIs('staff.*')];
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Tim usaha', 'href' => route('staff.index'), 'icon' => 'team', 'active' => request()->routeIs('staff.*')];
     }
-    $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => '▤', 'active' => request()->routeIs('features.*')];
+    $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
     $ui = [
         'sidebar' => [
             'businessName' => $currentTenant->name ?? 'Usaha bersama',
@@ -26,6 +26,9 @@
             'crumb' => trim(strip_tags($__env->yieldContent('crumb', 'Ringkasan'))),
             'dateLabel' => now()->locale('id')->translatedFormat('l, d F Y'),
             'links' => $sidebarLinks,
+            'userName' => auth()->user()->name ?? '',
+            'lowStockCount' => (int) trim(strip_tags($__env->yieldContent('low_stock', '0'))),
+            'productsUrl' => route('products.index'),
         ],
     ];
 @endphp
@@ -34,6 +37,7 @@
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · R Kasir</title>
+    @include('partials.theme-script')
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     @vite('resources/js/app.js')
     @stack('head')
@@ -51,5 +55,6 @@
         </main>
     </div>
     <script>window.rKasirUi = @json($ui);</script>
+    @stack('scripts')
 </body>
 </html>

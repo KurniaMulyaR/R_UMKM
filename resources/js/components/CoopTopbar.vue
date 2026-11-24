@@ -1,11 +1,18 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import Icon from './Icon.vue';
+import { currentTheme, setTheme } from '../theme.js';
 
 const props = defineProps({
     crumb: { type: String, default: 'Ringkasan' },
     dateLabel: { type: String, default: '' },
     links: { type: Array, default: () => [] },
+    userName: { type: String, default: '' },
+    lowStockCount: { type: Number, default: 0 },
+    productsUrl: { type: String, default: '/products' },
 });
+
+const theme = currentTheme;
 
 const isSearchOpen = ref(false);
 const searchQuery = ref('');
@@ -50,15 +57,20 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyboard));
 <template>
     <header class="topbar">
         <div class="topbar-left">
-            <button class="mobile-menu" type="button" aria-label="Buka menu" aria-controls="coop-sidebar" @click="toggleMenu">☰</button>
+            <button class="mobile-menu" type="button" aria-label="Buka menu" aria-controls="coop-sidebar" @click="toggleMenu"><Icon name="menu" /></button>
             <div class="breadcrumb"><span class="breadcrumb-root">R Kasir</span><span class="breadcrumb-divider">/</span><b>{{ crumb }}</b></div>
         </div>
         <div class="topbar-right">
             <button class="global-search-trigger" type="button" aria-label="Cari menu" @click="openSearch">
-                <span aria-hidden="true">⌕</span><span class="search-trigger-label">Cari menu</span><kbd>Ctrl K</kbd>
+                <Icon name="search" /><span class="search-trigger-label">Cari menu</span><kbd>Ctrl K</kbd>
             </button>
             <span class="today-label">{{ dateLabel }}</span>
-            <span class="online-pill"><i></i> Tersambung</span>
+            <div class="theme-toggle" role="group" aria-label="Tema tampilan">
+                <button type="button" :class="{ on: theme === 'light' }" aria-label="Mode terang" title="Mode terang" @click="setTheme('light')"><Icon name="sun" /></button>
+                <button type="button" :class="{ on: theme === 'dark' }" aria-label="Mode gelap" title="Mode gelap" @click="setTheme('dark')"><Icon name="moon" /></button>
+            </div>
+            <a class="round-btn hide-sm" :href="productsUrl" aria-label="Stok menipis" title="Stok menipis"><Icon name="bell" /><i v-if="lowStockCount" class="dot"></i></a>
+            <span class="topbar-avatar" :title="userName">{{ (userName || 'R').slice(0, 1).toUpperCase() }}</span>
         </div>
     </header>
 
@@ -66,14 +78,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyboard));
         <div v-if="isSearchOpen" class="global-search-backdrop" @click.self="closeSearch">
             <section class="global-search-panel" role="dialog" aria-modal="true" aria-label="Cari halaman">
                 <label class="global-search-input">
-                    <span aria-hidden="true">⌕</span>
+                    <Icon name="search" />
                     <input ref="searchInput" v-model="searchQuery" type="search" placeholder="Cari menu atau halaman..." autocomplete="off">
                     <button type="button" aria-label="Tutup pencarian" @click="closeSearch">Esc</button>
                 </label>
                 <div class="search-results-label">{{ searchQuery ? 'HASIL PENCARIAN' : 'MENU CEPAT' }}</div>
                 <div v-if="searchResults.length" class="global-search-results">
                     <a v-for="link in searchResults" :key="link.href" :href="link.href" class="global-search-result" @click="closeSearch">
-                        <span class="result-icon" aria-hidden="true">{{ link.icon }}</span>
+                        <span class="result-icon" aria-hidden="true"><Icon :name="link.icon" /></span>
                         <span class="result-copy"><b>{{ link.label }}</b><small>{{ link.group }}</small></span>
                         <span class="result-enter" aria-hidden="true">↵</span>
                     </a>

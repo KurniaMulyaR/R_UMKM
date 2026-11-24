@@ -4,6 +4,7 @@
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Siapkan usaha · R Kasir</title>
+    @include('partials.theme-script')
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     @vite('resources/js/app.js')
 </head>
@@ -31,5 +32,6 @@
         <p class="auth-foot">Sudah punya akun? <a href="{{ route('login') }}">Masuk di sini</a></p>
     </div>
     <div id="coop-showcase" data-mode="setup"></div>
+    @include('partials.theme-toggle-auth')
 </body>
 </html>

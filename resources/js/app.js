@@ -4,6 +4,7 @@ import CoopTopbar from './components/CoopTopbar.vue';
 import CoopShowcase from './components/CoopShowcase.vue';
 import FeatureCatalog from './components/FeatureCatalog.vue';
 import PosWorkspace from './components/PosWorkspace.vue';
+import DashboardOverview from './components/DashboardOverview.vue';
 
 const ui = window.rKasirUi ?? {};
 
@@ -26,4 +27,10 @@ const posHost = document.getElementById('pos-app');
 const posBootstrap = document.getElementById('pos-bootstrap');
 if (posHost && posBootstrap) {
     createApp(PosWorkspace, JSON.parse(posBootstrap.textContent)).mount(posHost);
+}
+
+const dashHost = document.getElementById('dashboard-app');
+const dashBootstrap = document.getElementById('dashboard-bootstrap');
+if (dashHost && dashBootstrap) {
+    createApp(DashboardOverview, JSON.parse(dashBootstrap.textContent)).mount(dashHost);
 }

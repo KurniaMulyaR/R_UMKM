@@ -51,10 +51,14 @@ class FeatureHubController extends Controller
                 'features' => [
                     ['name' => 'Toko online, domain & SEO', 'status' => 'Belum dibangun', 'summary' => 'Halaman toko, domain khusus, katalog publik, dan analitik halaman.'],
                     ['name' => 'Marketplace & sosial media', 'status' => 'Belum dibangun', 'summary' => 'Pemetaan produk, sinkronisasi order/settlement, kampanye, dan publikasi konten.'],
-                    ['name' => 'Inbox & notifikasi', 'status' => 'Belum dibangun', 'summary' => 'Percakapan pelanggan, penugasan, notifikasi, dan webhook kanal.'],
-                    ['name' => 'Komunitas koperasi', 'status' => 'Belum dibangun', 'summary' => 'Forum, diskusi, sumber belajar, moderasi, dan pelaporan konten.'],
+                    ['name' => 'Iklan Meta Ads', 'status' => 'Belum dibangun', 'summary' => 'Buat dan pantau kampanye iklan Meta dari data produk dan penjualan, dengan batas anggaran dan persetujuan pemilik.'],
+                    ['name' => 'Inbox terpadu & notifikasi WhatsApp', 'status' => 'Belum dibangun', 'summary' => 'Chat dan komentar dari sosmed serta WhatsApp dalam satu kotak masuk, plus notifikasi komentar baru ke penjual.'],
+                    ['name' => 'Landing page toko & template', 'status' => 'Belum dibangun', 'summary' => 'Halaman toko per usaha dengan tampilan yang bisa diubah pemilik, katalog publik, dan tombol pesan via WhatsApp.'],
+                    ['name' => 'Layanan SEO & domain', 'status' => 'Belum dibangun', 'summary' => 'Pengaturan SEO halaman toko, pembelian atau penyambungan domain, dan SSL otomatis.'],
+                    ['name' => 'Komunitas pengguna', 'status' => 'Belum dibangun', 'summary' => 'Forum berbagi ilmu memakai sistem, sumber belajar, moderasi, dan pelaporan konten.'],
+                    ['name' => 'Campaign UMKM terbaik', 'status' => 'Belum dibangun', 'summary' => 'Seleksi usaha berpenghasilan baik dengan persetujuan pemilik, lalu kampanye profil dan cerita sukses.'],
                     ['name' => 'AI untuk audit & draf', 'status' => 'Belum dibangun', 'summary' => 'Analisis anomali dan pembuatan draf yang tetap memerlukan persetujuan manusia.'],
-                    ['name' => 'Panel platform R Tech & analitik', 'status' => 'Belum dibangun', 'summary' => 'Administrasi platform, langganan, feature access, support, dan analitik agregat.'],
+                    ['name' => 'Panel master pemilik platform', 'status' => 'Belum dibangun', 'summary' => 'Kontrol seluruh UMKM terdaftar: grafik pertumbuhan, langganan, feature access, support, dan log aktivitas.'],
                 ],
             ],
         ];
