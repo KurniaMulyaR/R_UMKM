@@ -133,7 +133,10 @@ kbd{font:600 10px ui-monospace,monospace;background:var(--surface-3);color:var(-
 .eyebrow{font-size:11px;letter-spacing:1.3px;font-weight:700;color:var(--primary);margin-bottom:6px}
 .card,.section-card,.form-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .section-card,.form-card{padding:22px;margin-bottom:20px}
-.section-title{font-size:16px;font-weight:700;margin-bottom:14px}
+.section-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.section-title h2{font-size:16px}
+.search-input{display:flex;align-items:center;gap:8px;flex:1;background:var(--surface-3);border-radius:999px;padding:0 14px}
+.search-input input{border:0;background:transparent;box-shadow:none}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 18px;border-radius:12px;border:1px solid transparent;font-weight:600;font-size:13.5px;transition:.15s;white-space:nowrap}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-primary{background:var(--primary);color:var(--primary-ink);box-shadow:0 8px 18px color-mix(in srgb,var(--primary) 28%,transparent)}
@@ -162,9 +165,11 @@ input[type=checkbox],input[type=radio]{width:18px;min-height:18px;height:18px;ac
 .form-stack{display:grid;gap:16px}
 .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 .form-spacer{flex:1}
-.product-form{display:grid;gap:16px}
+.product-form{display:none;margin-bottom:20px}
+.product-form.open{display:block}
+.product-form h2{font-size:16px;margin-bottom:14px}
 .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.search-input{max-width:340px}
+
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.8px;color:var(--muted);font-weight:700;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}

@@ -11,6 +11,10 @@
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Tim usaha', 'href' => route('staff.index'), 'icon' => 'team', 'active' => request()->routeIs('staff.*')];
     }
+    if (in_array($currentRole->key ?? '', ['owner', 'manager', 'warehouse'], true)) {
+        $sidebarLinks[] = ['group' => 'PEMBELIAN', 'label' => 'Pesanan beli', 'href' => route('purchasing.index'), 'icon' => 'receipt', 'active' => request()->routeIs('purchasing.index', 'purchasing.create', 'purchasing.show')];
+        $sidebarLinks[] = ['group' => 'PEMBELIAN', 'label' => 'Supplier', 'href' => route('purchasing.suppliers'), 'icon' => 'wallet', 'active' => request()->routeIs('purchasing.suppliers')];
+    }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
     $ui = [
         'sidebar' => [

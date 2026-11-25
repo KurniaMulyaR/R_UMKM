@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FeatureHubController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\ShiftController;
@@ -48,4 +49,19 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/sales/{id}', [SalesController::class, 'show'])->name('sales.show');
     Route::post('/sales/{id}/payments', [SalesController::class, 'collectPayment'])->name('sales.payments.store');
     Route::post('/sales/{id}/void', [SalesController::class, 'void'])->name('sales.void');
+
+    Route::middleware('role:owner,manager,warehouse')->prefix('purchasing')->name('purchasing.')->group(function () {
+        Route::get('/suppliers', [PurchasingController::class, 'suppliers'])->name('suppliers');
+        Route::post('/suppliers', [PurchasingController::class, 'storeSupplier'])->name('suppliers.store');
+        Route::get('/orders', [PurchasingController::class, 'index'])->name('index');
+        Route::get('/orders/create', [PurchasingController::class, 'create'])->name('create');
+        Route::post('/orders', [PurchasingController::class, 'store'])->name('store');
+        Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
+        Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
+    });
+    Route::middleware('role:owner,manager')->prefix('purchasing')->name('purchasing.')->group(function () {
+        Route::post('/orders/{id}/approve', [PurchasingController::class, 'approve'])->name('approve');
+        Route::post('/orders/{id}/cancel', [PurchasingController::class, 'cancel'])->name('cancel');
+        Route::post('/bills/{billId}/pay', [PurchasingController::class, 'pay'])->name('pay');
+    });
 });

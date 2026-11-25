@@ -83,6 +83,7 @@ class DashboardController extends Controller
         $methodLabels = ['cash' => 'Tunai', 'bank_transfer' => 'Transfer bank', 'qris_external' => 'QRIS', 'credit' => 'Kasbon'];
         $methods = DB::table('payments')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->whereIn('status', ['confirmed', 'pending'])->where('created_at', '>=', $weekStart)
+            ->whereNotIn('id', DB::table('payment_allocations')->whereNotNull('supplier_bill_id')->select('payment_id'))
             ->groupBy('method')->selectRaw('method, SUM(amount) as total')->pluck('total', 'method')
             ->map(fn ($total, $method) => ['key' => $method, 'label' => $methodLabels[$method] ?? $method, 'value' => (float) $total])->values();
 
