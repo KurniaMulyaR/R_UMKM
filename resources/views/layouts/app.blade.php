@@ -11,6 +11,7 @@
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
         $sidebarLinks[] = ['group' => 'OPERASIONAL', 'label' => 'Pengeluaran', 'href' => route('expenses.index'), 'icon' => 'receipt', 'active' => request()->routeIs('expenses.*')];
         $sidebarLinks[] = ['group' => 'OPERASIONAL', 'label' => 'Rekonsiliasi', 'href' => route('reconciliations.index'), 'icon' => 'check', 'active' => request()->routeIs('reconciliations.*')];
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Umur piutang', 'href' => route('customers.aging'), 'icon' => 'clock', 'active' => request()->routeIs('customers.aging')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Opname stok', 'href' => route('stock-counts.index'), 'icon' => 'box', 'active' => request()->routeIs('stock-counts.*')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Aset usaha', 'href' => route('assets.index'), 'icon' => 'wallet', 'active' => request()->routeIs('assets.*')];
         if (($currentRole->key ?? '') === 'owner') {

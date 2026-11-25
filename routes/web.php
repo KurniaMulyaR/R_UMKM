@@ -67,6 +67,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post('/staff', [StaffController::class, 'store'])->middleware('role:owner')->name('staff.store');
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::get('/customers/aging', [CustomerController::class, 'aging'])->middleware('role:owner,manager')->name('customers.aging');
+    Route::put('/customers/{id}/credit-limit', [CustomerController::class, 'updateCreditLimit'])->middleware('role:owner,manager')->name('customers.credit-limit');
     Route::get('/shifts', [ShiftController::class, 'index'])->name('shifts.index');
     Route::post('/shifts/open', [ShiftController::class, 'open'])->name('shifts.open');
     Route::post('/shifts/close', [ShiftController::class, 'close'])->name('shifts.close');

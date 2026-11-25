@@ -138,6 +138,17 @@ class PosController extends Controller
                 $total = round($subtotal - $discount, 2);
                 $tenderTotal = round(collect($data['payments'])->sum(fn ($payment) => (float) $payment['amount']), 2);
                 if (abs($tenderTotal - $total) > 0.004) throw ValidationException::withMessages(['payments' => 'Jumlah metode bayar harus sama dengan total transaksi.']);
+                $creditAmount = round(collect($data['payments'])->where('method', 'credit')->sum(fn ($payment) => (float) $payment['amount']), 2);
+                if ($creditAmount > 0) {
+                    $customer = DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $data['customer_id'])->lockForUpdate()->first();
+                    if ($customer->credit_limit !== null) {
+                        $outstanding = \App\Http\Controllers\CustomerController::outstandingFor($tenant->id, $customer->id);
+                        if ($outstanding + $creditAmount > (float) $customer->credit_limit + 0.004) {
+                            $room = max(0, (float) $customer->credit_limit - $outstanding);
+                            throw ValidationException::withMessages(['customer_id' => 'Melebihi batas kredit '.$customer->name.'. Sisa batas Rp '.number_format($room, 0, ',', '.').'.']);
+                        }
+                    }
+                }
                 $cashReceived = round((float) ($data['cash_received'] ?? 0), 2);
                 if ($cashApplied > 0 && $cashReceived < $cashApplied) throw ValidationException::withMessages(['cash_received' => 'Uang tunai belum cukup.']);
 
