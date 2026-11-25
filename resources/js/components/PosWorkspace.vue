@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import QRCode from 'qrcode';
 
 const props = defineProps({
     catalog: { type: Array, default: () => [] },
@@ -10,6 +11,8 @@ const props = defineProps({
     shiftOpenedAt: { type: String, default: '' },
     productsUrl: { type: String, default: '/products' },
     shiftsUrl: { type: String, default: '/shifts' },
+    xenditEnabled: { type: Boolean, default: false },
+    qrisUrl: { type: String, default: '' },
 });
 
 const { catalog, customers, checkoutUrl, csrfToken, shiftOpen, shiftOpenedAt, productsUrl, shiftsUrl } = props;
@@ -24,6 +27,11 @@ const notes = ref('');
 const payments = ref([{ method: 'cash', amount: 0 }]);
 const message = ref('');
 const searchInput = ref(null);
+const qris = ref(null);
+const qrisBusy = ref(false);
+const qrisCanvas = ref(null);
+let qrisTimer = null;
+const hasXendit = computed(() => payments.value.some((payment) => payment.method === 'qris_xendit'));
 
 const categories = computed(() => ['Semua', ...new Set(props.catalog.map((item) => item.category_name || 'Umum'))]);
 const filteredProducts = computed(() => {
@@ -124,8 +132,93 @@ function validateCheckout(event) {
         else if (hasCredit.value && !customerId.value) message.value = 'Pilih pelanggan untuk pembayaran kasbon.';
         else if (cashTotal.value > Number(cashReceived.value || 0)) message.value = 'Uang tunai diterima belum cukup.';
         else message.value = 'Jumlah metode pembayaran harus sama dengan total transaksi.';
+        return;
+    }
+    if (hasXendit.value) {
+        event.preventDefault();
+        startQris();
     }
 }
+
+function qrisHeaders() {
+    return { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken };
+}
+
+async function startQris() {
+    if (qrisBusy.value) return;
+    qrisBusy.value = true;
+    message.value = '';
+    try {
+        const response = await fetch(props.qrisUrl, {
+            method: 'POST', headers: qrisHeaders(), credentials: 'same-origin',
+            body: JSON.stringify({
+                customer_id: customerId.value || null, discount: discountValue.value, cash_received: Number(cashReceived.value) || 0, notes: notes.value,
+                items: cart.value.map((item) => ({ variant_id: item.variant_id, quantity: item.quantity })),
+                payments: payments.value.map((payment) => ({ method: payment.method, amount: Number(payment.amount) || 0 })),
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            message.value = data.message || Object.values(data.errors || {}).flat()[0] || 'QRIS belum bisa dibuat. Coba lagi.';
+            return;
+        }
+        qris.value = { ...data, state: 'waiting' };
+        await nextTick();
+        if (qrisCanvas.value) await QRCode.toCanvas(qrisCanvas.value, data.qr_string, { width: 260, margin: 1 });
+        qrisTimer = setInterval(pollQris, 3000);
+    } catch (error) {
+        message.value = 'Koneksi bermasalah saat membuat QRIS.';
+    } finally {
+        qrisBusy.value = false;
+    }
+}
+
+async function pollQris() {
+    if (!qris.value) return;
+    try {
+        const response = await fetch(qris.value.status_url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        const data = await response.json();
+        if (data.status === 'paid') {
+            stopQrisTimer();
+            qris.value.state = 'paid';
+            submitQrisComplete();
+        } else if (['expired', 'cancelled', 'amount_mismatch'].includes(data.status)) {
+            stopQrisTimer();
+            qris.value.state = data.status;
+        }
+    } catch (error) {
+        /* jaringan sesaat putus; coba lagi pada interval berikutnya */
+    }
+}
+
+function stopQrisTimer() {
+    if (qrisTimer) clearInterval(qrisTimer);
+    qrisTimer = null;
+}
+
+function submitQrisComplete() {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = qris.value.complete_url;
+    const token = document.createElement('input');
+    token.type = 'hidden';
+    token.name = '_token';
+    token.value = csrfToken;
+    form.appendChild(token);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+async function closeQris() {
+    stopQrisTimer();
+    const current = qris.value;
+    qris.value = null;
+    if (current && current.state === 'waiting') {
+        fetch(current.cancel_url, { method: 'POST', headers: qrisHeaders(), credentials: 'same-origin' }).catch(() => {});
+    }
+}
+
+onBeforeUnmount(stopQrisTimer);
 </script>
 
 <template>
@@ -181,7 +274,7 @@ function validateCheckout(event) {
                     <div class="pay-actions"><label>Metode pembayaran</label><button type="button" class="small-link" :disabled="payments.length >= 4" @click="addPayment">＋ Split bayar</button></div>
                     <div class="payment-stack">
                         <div v-for="(payment, index) in payments" :key="index" class="payment-row">
-                            <select v-model="payment.method" :name="`payments[${index}][method]`" :aria-label="`Metode pembayaran ${index + 1}`" @change="changePaymentMethod(payment)"><option value="cash">Tunai</option><option value="bank_transfer">Transfer bank</option><option value="qris_external">QRIS</option><option value="credit">Kasbon</option></select>
+                            <select v-model="payment.method" :name="`payments[${index}][method]`" :aria-label="`Metode pembayaran ${index + 1}`" @change="changePaymentMethod(payment)"><option value="cash">Tunai</option><option value="bank_transfer">Transfer bank</option><option value="qris_external">QRIS (manual)</option><option v-if="xenditEnabled" value="qris_xendit">QRIS Xendit (otomatis)</option><option value="credit">Kasbon</option></select>
                             <input v-model.number="payment.amount" :name="`payments[${index}][amount]`" type="number" min="0.01" step="1" :aria-label="`Nominal pembayaran ${index + 1}`" required>
                             <button v-if="payments.length > 1" type="button" :aria-label="`Hapus metode bayar ${index + 1}`" @click="removePayment(index)">×</button>
                         </div>
@@ -194,5 +287,17 @@ function validateCheckout(event) {
                 </div>
             </form>
         </aside>
+    </div>
+
+    <div v-if="qris" class="qris-modal" role="dialog" aria-modal="true" aria-label="Pembayaran QRIS">
+        <div class="qris-card">
+            <h2>Scan untuk membayar</h2>
+            <b class="qris-amount">{{ formatRupiah(qris.amount) }}</b>
+            <canvas ref="qrisCanvas" width="260" height="260"></canvas>
+            <p v-if="qris.state === 'waiting'" class="muted">Menunggu pembayaran… transaksi tersimpan otomatis setelah lunas.</p>
+            <p v-else-if="qris.state === 'paid'" class="muted">Pembayaran diterima, menyimpan transaksi…</p>
+            <p v-else class="muted">{{ qris.state === 'expired' ? 'QR kedaluwarsa.' : qris.state === 'amount_mismatch' ? 'Nominal yang dibayar tidak sama. Hubungi pemilik.' : 'QR dibatalkan.' }} Buat QR baru dari kasir.</p>
+            <button type="button" class="btn btn-secondary" @click="closeQris">{{ qris.state === 'waiting' ? 'Batalkan' : 'Tutup' }}</button>
+        </div>
     </div>
 </template>

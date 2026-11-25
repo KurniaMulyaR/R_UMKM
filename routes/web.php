@@ -16,7 +16,10 @@ use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\JournalController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\PaymentGatewayController;
+use App\Http\Controllers\QrisChargeController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
@@ -32,6 +35,8 @@ Route::get('/', function () {
 Route::get('/setup', [SetupController::class, 'create'])->name('setup');
 Route::post('/setup', [SetupController::class, 'store'])->middleware(['guest', 'throttle:5,1'])->name('setup.store');
 
+Route::post('/webhooks/xendit/{tenantId}', XenditWebhookController::class)->middleware('throttle:120,1')->name('webhooks.xendit');
+
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:8,1')->name('login.store');
@@ -43,6 +48,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/features', FeatureHubController::class)->name('features.index');
     Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
     Route::post('/pos/checkout', [PosController::class, 'checkout'])->middleware('throttle:30,1')->name('pos.checkout');
+    Route::post('/pos/qris', [QrisChargeController::class, 'store'])->middleware('throttle:20,1')->name('pos.qris.store');
+    Route::get('/pos/qris/{id}/status', [QrisChargeController::class, 'status'])->middleware('throttle:120,1')->name('pos.qris.status');
+    Route::post('/pos/qris/{id}/complete', [QrisChargeController::class, 'complete'])->middleware('throttle:30,1')->name('pos.qris.complete');
+    Route::post('/pos/qris/{id}/cancel', [QrisChargeController::class, 'cancel'])->name('pos.qris.cancel');
+    Route::get('/payment-gateway', [PaymentGatewayController::class, 'edit'])->middleware('role:owner')->name('payment-gateway.edit');
+    Route::put('/payment-gateway', [PaymentGatewayController::class, 'update'])->middleware('role:owner')->name('payment-gateway.update');
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::post('/products', [ProductController::class, 'store'])->middleware('role:owner,manager,warehouse')->name('products.store');
     Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->middleware('role:owner,manager')->name('products.edit');

@@ -12,7 +12,7 @@ class FeatureHubController extends Controller
             [
                 'group' => 'Operasional inti',
                 'features' => [
-                    ['name' => 'Kasir & pembayaran', 'status' => 'Sebagian', 'summary' => 'POS, diskon, split tender, tunai, transfer, QRIS manual, dan kasbon. Gateway QRIS belum terhubung.'],
+                    ['name' => 'Kasir & pembayaran', 'status' => 'Sebagian', 'summary' => 'POS, diskon, split tender, tunai, transfer, kasbon, QRIS manual, dan QRIS Xendit otomatis (kunci per usaha). Printer struk dan scanner belum dikonfirmasi.'],
                     ['name' => 'Katalog produk & barcode', 'status' => 'Sebagian', 'summary' => 'Tambah/edit produk, harga, barcode, kategori, dan arsip. Varian lanjutan dan konversi satuan belum ada.'],
                     ['name' => 'Persediaan & stok', 'status' => 'Sebagian', 'summary' => 'Stok awal, mutasi penjualan/pembelian/retur, dan opname dengan persetujuan serta jurnal selisih. Transfer antar-outlet dan penyesuaian massal belum ada.'],
                     ['name' => 'Pelanggan & piutang', 'status' => 'Sebagian', 'summary' => 'Data pelanggan dan pelunasan kasbon dasar tersedia. Aging piutang, limit kredit, dan reminder belum ada.'],

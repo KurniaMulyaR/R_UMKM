@@ -439,3 +439,10 @@ a.td-main:hover{color:var(--primary)}
   .auth-card{padding:26px 20px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* QRIS Xendit modal */
+.qris-modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:rgba(15,23,42,.55);padding:16px}
+.qris-card{background:var(--surface,#fff);color:var(--text,#0f172a);border-radius:20px;padding:24px;display:grid;gap:12px;justify-items:center;max-width:360px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.qris-card h2{margin:0;font-size:18px}
+.qris-card canvas{background:#fff;border-radius:12px;padding:6px;max-width:100%;height:auto}
+.qris-amount{font-size:24px}

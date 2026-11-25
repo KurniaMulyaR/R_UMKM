@@ -45,7 +45,11 @@ class PosController extends Controller
         $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->where('cashier_user_id', auth()->id())->where('status', 'open')->first();
 
-        return view('pos.index', compact('catalog', 'customers', 'shift'));
+        $xenditEnabled = DB::table('payment_gateway_settings')->where('tenant_id', $tenant->id)->where('provider', 'xendit')->where('is_active', true)->exists();
+        $paidCharges = DB::table('payment_gateway_charges')->where('tenant_id', $tenant->id)->where('cashier_user_id', auth()->id())
+            ->where('status', 'paid')->whereNull('sale_id')->orderBy('paid_at')->get(['id', 'amount', 'paid_at']);
+
+        return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges'));
     }
 
     public function checkout(Request $request): RedirectResponse
@@ -71,11 +75,35 @@ class PosController extends Controller
             throw ValidationException::withMessages(['cash_received' => 'Uang diterima harus sama atau lebih besar dari pembayaran tunai.']);
         }
 
+        $saleId = $this->processCheckout($tenant, $outlet, $data, $cashApplied);
+
+        return redirect()->route('sales.show', $saleId)->with('success', 'Transaksi berhasil disimpan.');
+    }
+
+    /**
+     * Run the whole checkout inside one transaction and return the new sale id.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function processCheckout(object $tenant, object $outlet, array $data, float $cashApplied, ?string $chargeId = null): string
+    {
         try {
-            $saleId = DB::transaction(function () use ($data, $tenant, $outlet, $cashApplied) {
+            $saleId = DB::transaction(function () use ($data, $tenant, $outlet, $cashApplied, $chargeId) {
                 $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
                     ->where('cashier_user_id', auth()->id())->where('status', 'open')->lockForUpdate()->first();
                 if (! $shift) throw ValidationException::withMessages(['shift' => 'Buka shift sebelum memulai transaksi.']);
+
+                $charge = null;
+                if ($chargeId) {
+                    $charge = DB::table('payment_gateway_charges')->where('tenant_id', $tenant->id)->where('id', $chargeId)->lockForUpdate()->first();
+                    if (! $charge || $charge->status !== 'paid' || $charge->sale_id || $charge->cashier_user_id !== auth()->id()) {
+                        throw ValidationException::withMessages(['payments' => 'Pembayaran QRIS tidak valid atau sudah dipakai.']);
+                    }
+                    $qrisTender = collect($data['payments'])->where('method', 'qris_external')->sum(fn ($payment) => (float) $payment['amount']);
+                    if (abs($qrisTender - (float) $charge->amount) > 0.004) {
+                        throw ValidationException::withMessages(['payments' => 'Nominal QRIS tidak sama dengan pembayaran yang masuk.']);
+                    }
+                }
 
                 $lineRows = []; $subtotal = 0.0;
                 foreach ($data['items'] as $item) {
@@ -129,6 +157,10 @@ class PosController extends Controller
                     'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'sale_id' => $saleId, 'type' => 'discount',
                     'label' => 'Diskon transaksi', 'calculation_method' => 'fixed', 'amount' => $discount, 'created_at' => $now, 'updated_at' => $now,
                 ]);
+
+                if ($charge) {
+                    DB::table('payment_gateway_charges')->where('id', $charge->id)->update(['status' => 'used', 'sale_id' => $saleId, 'updated_at' => $now]);
+                }
 
                 $cogs = 0.0;
                 $allocatedDiscount = 0.0;
@@ -238,7 +270,7 @@ class PosController extends Controller
             throw $exception;
         }
 
-        return redirect()->route('sales.show', $saleId)->with('success', 'Transaksi berhasil disimpan.');
+        return $saleId;
     }
 
     private function nextNumber(string $tenantId, string $outletId, string $type): string
