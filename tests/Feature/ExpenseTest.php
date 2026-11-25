@@ -15,7 +15,7 @@ class ExpenseTest extends TestCase
         return (float) DB::table('journal_lines')
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
             ->join('chart_of_accounts', 'chart_of_accounts.id', '=', 'journal_lines.account_id')
-            ->where('chart_of_accounts.code', $code)->where('journal_entries.status', 'posted')
+            ->where('chart_of_accounts.code', $code)->whereIn('journal_entries.status', ['posted', 'reversed'])
             ->sum(DB::raw('journal_lines.debit - journal_lines.credit'));
     }
 

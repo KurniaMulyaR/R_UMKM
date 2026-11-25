@@ -41,6 +41,7 @@
             <span><b>{{ $bill->bill_number }}</b><span class="td-sub">Jatuh tempo {{ \Illuminate\Support\Carbon::parse($bill->due_at)->format('d M Y') }}{{ $bill->supplier_invoice_number ? ' · Faktur '.$bill->supplier_invoice_number : '' }}</span></span>
             <span style="text-align:right"><b>Rp {{ number_format($bill->total,0,',','.') }}</b><span class="td-sub">Sisa Rp {{ number_format($bill->balance_due,0,',','.') }} · <span class="status {{ $bill->status === 'paid' ? '' : 'pending' }}">{{ ['open'=>'Belum dibayar','partial'=>'Dicicil','paid'=>'Lunas'][$bill->status] ?? $bill->status }}</span></span></span>
         </div>
+        @if($canManage)<p style="margin:0 0 6px"><a class="small-link" href="{{ route('purchasing.return.create',$bill->id) }}">Retur barang / riwayat retur →</a></p>@endif
         @if($canManage && in_array($bill->status,['open','partial'],true))
             <form method="post" action="{{ route('purchasing.pay',$bill->id) }}" class="form-grid" style="align-items:end;margin:6px 0 16px">@csrf
                 <label>Metode<select name="method"><option value="cash">Tunai</option><option value="bank_transfer">Transfer bank</option></select></label>

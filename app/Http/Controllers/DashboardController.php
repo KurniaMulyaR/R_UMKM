@@ -75,7 +75,7 @@ class DashboardController extends Controller
             ->map(function ($account) use ($tenant) {
                 $balance = DB::table('journal_lines')->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
                     ->where('journal_lines.tenant_id', $tenant->id)->where('journal_lines.account_id', $account->chart_account_id)
-                    ->where('journal_entries.status', 'posted')->selectRaw('COALESCE(SUM(journal_lines.debit - journal_lines.credit), 0) as balance')->value('balance');
+                    ->whereIn('journal_entries.status', ['posted', 'reversed'])->selectRaw('COALESCE(SUM(journal_lines.debit - journal_lines.credit), 0) as balance')->value('balance');
 
                 return ['name' => $account->name, 'type' => $account->type, 'balance' => (float) $balance];
             })->values();

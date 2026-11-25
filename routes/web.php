@@ -9,7 +9,9 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FeatureHubController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\ShiftController;
@@ -61,6 +63,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
         Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
     });
+    Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');
     Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');
         Route::post('/', [ExpenseController::class, 'store'])->name('store');
@@ -77,5 +80,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/orders/{id}/approve', [PurchasingController::class, 'approve'])->name('approve');
         Route::post('/orders/{id}/cancel', [PurchasingController::class, 'cancel'])->name('cancel');
         Route::post('/bills/{billId}/pay', [PurchasingController::class, 'pay'])->name('pay');
+        Route::get('/aging', [PurchasingController::class, 'aging'])->name('aging');
+        Route::get('/bills/{billId}/return', [PurchaseReturnController::class, 'create'])->name('return.create');
+        Route::post('/bills/{billId}/return', [PurchaseReturnController::class, 'store'])->name('return.store');
     });
 });

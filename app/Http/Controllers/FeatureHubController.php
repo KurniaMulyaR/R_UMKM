@@ -27,10 +27,10 @@ class FeatureHubController extends Controller
                 'group' => 'Pembelian, dokumen & keuangan',
                 'features' => [
                     ['name' => 'Supplier, PO & penerimaan barang', 'status' => 'Ada', 'summary' => 'Master supplier, pesanan pembelian dengan persetujuan, penerimaan sebagian, dan biaya rata-rata bergerak. Retur pembelian belum ada.'],
-                    ['name' => 'Tagihan & pembayaran supplier', 'status' => 'Sebagian', 'summary' => 'Tagihan otomatis saat barang diterima dan pembayaran bertahap sudah ada; retur pembelian dan umur hutang belum.'],
+                    ['name' => 'Tagihan & pembayaran supplier', 'status' => 'Ada', 'summary' => 'Tagihan otomatis saat barang diterima, pembayaran bertahap, retur pembelian (selama tagihan belum lunas), dan laporan umur hutang. Refund retur atas tagihan lunas belum.'],
                     ['name' => 'Invoice, surat jalan & kwitansi', 'status' => 'Belum dibangun', 'summary' => 'Dokumen pesanan, pemenuhan, invoice, bukti terima, dan cetak.'],
                     ['name' => 'Pengeluaran & rekonsiliasi kas/bank', 'status' => 'Sebagian', 'summary' => 'Pencatatan biaya per kategori dengan jurnal, pembatalan, dan untung bersih bulanan sudah ada. Mutasi kas, settlement, dan rekonsiliasi belum.'],
-                    ['name' => 'COA, jurnal & tutup periode', 'status' => 'Sebagian', 'summary' => 'Jurnal penjualan dan akun bawaan tercatat. Pengelolaan akun, laporan neraca/laba-rugi, dan tutup periode belum ada.'],
+                    ['name' => 'COA, jurnal & tutup periode', 'status' => 'Sebagian', 'summary' => 'Laporan laba rugi dari jurnal sudah ada. Jurnal penjualan dan akun bawaan tercatat. Pengelolaan akun, neraca, dan tutup periode belum ada.'],
                     ['name' => 'Laporan usaha', 'status' => 'Belum dibangun', 'summary' => 'Laporan penjualan, laba-rugi, arus kas, stok, hutang, dan piutang per periode/outlet.'],
                 ],
             ],

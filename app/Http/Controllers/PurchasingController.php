@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +56,40 @@ class PurchasingController extends Controller
             ->whereIn('status', ['open', 'partial'])->sum('balance_due');
 
         return view('purchasing.orders', compact('orders', 'payable'));
+    }
+
+    public function aging(Request $request): View
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $today = Carbon::now($tenant->timezone)->startOfDay();
+        $bills = DB::table('supplier_bills')->join('suppliers', 'suppliers.id', '=', 'supplier_bills.supplier_id')
+            ->where('supplier_bills.tenant_id', $tenant->id)->where('supplier_bills.outlet_id', $outlet->id)
+            ->whereIn('supplier_bills.status', ['open', 'partial'])->where('supplier_bills.balance_due', '>', 0)
+            ->orderBy('supplier_bills.due_at')->get(['supplier_bills.*', 'suppliers.name as supplier_name']);
+
+        $buckets = ['current' => 'Belum jatuh tempo', 'd30' => '1–30 hari', 'd60' => '31–60 hari', 'd90' => '61–90 hari', 'over' => '> 90 hari'];
+        $bucketOf = function (int $daysLate): string {
+            return match (true) {
+                $daysLate <= 0 => 'current', $daysLate <= 30 => 'd30', $daysLate <= 60 => 'd60', $daysLate <= 90 => 'd90', default => 'over',
+            };
+        };
+        $suppliers = [];
+        $totals = array_fill_keys(array_keys($buckets), 0.0);
+        foreach ($bills as $bill) {
+            $due = $bill->due_at ? Carbon::parse($bill->due_at)->startOfDay() : $today;
+            $daysLate = $due->lt($today) ? (int) $due->diffInDays($today) : 0;
+            $bill->days_late = $daysLate;
+            $key = $bucketOf($daysLate);
+            $row = $suppliers[$bill->supplier_id] ?? ['name' => $bill->supplier_name, 'buckets' => array_fill_keys(array_keys($buckets), 0.0), 'total' => 0.0];
+            $row['buckets'][$key] += (float) $bill->balance_due;
+            $row['total'] += (float) $bill->balance_due;
+            $suppliers[$bill->supplier_id] = $row;
+            $totals[$key] += (float) $bill->balance_due;
+        }
+        uasort($suppliers, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        return view('purchasing.aging', ['buckets' => $buckets, 'suppliers' => $suppliers, 'totals' => $totals, 'bills' => $bills, 'grandTotal' => array_sum($totals)]);
     }
 
     public function create(Request $request): View
