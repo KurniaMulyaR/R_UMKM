@@ -40,7 +40,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Sinkronisasi offline & perangkat', 'status' => 'Belum dibangun', 'summary' => 'Antrean offline, registrasi perangkat, sinkronisasi idempoten, dan penanganan konflik. Tabel dasar sudah disiapkan.'],
                     ['name' => 'Menu, resep & biaya bahan', 'status' => 'Belum dibangun', 'summary' => 'Resep bahan, pengurangan bahan otomatis, dan costing untuk usaha makanan.'],
                     ['name' => 'Nomor seri & garansi', 'status' => 'Belum dibangun', 'summary' => 'Serial unit, riwayat garansi, dan servis untuk toko elektronik.'],
-                    ['name' => 'Aset & perawatan', 'status' => 'Belum dibangun', 'summary' => 'Register aset, jadwal perawatan, penyusutan, dan pelepasan aset.'],
+                    ['name' => 'Aset & perawatan', 'status' => 'Sebagian', 'summary' => 'Register aset, umur, nilai buku garis lurus, jadwal dan riwayat perawatan, serta pelepasan sudah ada. Jurnal penyusutan dan pembelian dari PO belum.'],
                     ['name' => 'Sewa alat', 'status' => 'Belum dibangun', 'summary' => 'Booking, ketersediaan barang, kontrak sewa, deposit, dan pengembalian.'],
                     ['name' => 'Pembiayaan/cicilan syariah', 'status' => 'Belum dibangun', 'summary' => 'Pengajuan, akad, jadwal angsuran, pembayaran, dan restrukturisasi.'],
                     ['name' => 'Karyawan & payroll', 'status' => 'Belum dibangun', 'summary' => 'Data karyawan, absensi, komponen gaji, potongan, dan proses payroll.'],

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssetController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CustomerController;
@@ -58,6 +59,13 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/orders', [PurchasingController::class, 'store'])->name('store');
         Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
         Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
+    });
+    Route::middleware('role:owner,manager')->prefix('assets')->name('assets.')->group(function () {
+        Route::get('/', [AssetController::class, 'index'])->name('index');
+        Route::post('/', [AssetController::class, 'store'])->name('store');
+        Route::get('/{id}', [AssetController::class, 'show'])->name('show');
+        Route::post('/{id}/maintenance', [AssetController::class, 'storeMaintenance'])->name('maintenance.store');
+        Route::post('/{id}/dispose', [AssetController::class, 'dispose'])->name('dispose');
     });
     Route::middleware('role:owner,manager')->prefix('purchasing')->name('purchasing.')->group(function () {
         Route::post('/orders/{id}/approve', [PurchasingController::class, 'approve'])->name('approve');

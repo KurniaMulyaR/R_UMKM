@@ -9,6 +9,7 @@
         ['group' => 'DATA USAHA', 'label' => 'Anggota & pelanggan', 'href' => route('customers.index'), 'icon' => 'users', 'active' => request()->routeIs('customers.*')],
     ];
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Aset usaha', 'href' => route('assets.index'), 'icon' => 'wallet', 'active' => request()->routeIs('assets.*')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Tim usaha', 'href' => route('staff.index'), 'icon' => 'team', 'active' => request()->routeIs('staff.*')];
     }
     if (in_array($currentRole->key ?? '', ['owner', 'manager', 'warehouse'], true)) {
