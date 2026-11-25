@@ -22,6 +22,7 @@
     }
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Neraca', 'href' => route('reports.balance-sheet'), 'icon' => 'wallet', 'active' => request()->routeIs('reports.balance-sheet', 'reports.equity.*')];
+        $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Tutup periode', 'href' => route('reports.periods'), 'icon' => 'check', 'active' => request()->routeIs('reports.periods*')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.profit-loss')];
     }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];

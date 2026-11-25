@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -90,6 +91,7 @@ class AssetController extends Controller
         if ($cost <= 0) {
             throw ValidationException::withMessages(['funding' => 'Harga beli nol tidak perlu dijurnal.']);
         }
+        AccountingPeriod::assertOpen($tenant->id, $asset->purchase_date);
         if ($funding === 'owner_equity') {
             $creditAccount = $this->systemAccount($tenant->id, '3010', 'Modal Pemilik', 'equity', 'credit', $now);
         } else {
@@ -159,6 +161,7 @@ class AssetController extends Controller
                     }
                     $entryId = (string) Str::uuid();
                     $entryDate = $cursor->copy()->endOfMonth()->min($now)->toDateString();
+                    AccountingPeriod::assertOpen($tenant->id, $entryDate);
                     DB::table('journal_entries')->insert([
                         'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'DEP-'.$asset->code.'-'.$period,
                         'entry_date' => $entryDate, 'status' => 'posted', 'description' => 'Penyusutan '.$asset->name.' '.$period,

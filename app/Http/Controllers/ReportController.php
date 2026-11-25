@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -102,6 +103,8 @@ class ReportController extends Controller
             'amount' => ['required', 'numeric', 'gt:0', 'max:99999999999999'], 'entry_date' => ['required', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string', 'max:300'],
         ]);
+
+        AccountingPeriod::assertOpen($tenant->id, $data['entry_date']);
 
         DB::transaction(function () use ($tenant, $outlet, $data) {
             $now = now($tenant->timezone);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,7 @@ class SalesController extends Controller
         DB::transaction(function () use ($tenant, $outlet, $id, $data) {
             $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $id)->lockForUpdate()->first();
             abort_unless($sale && $sale->status === 'completed', 422, 'Transaksi ini tidak dapat dibatalkan.');
+            AccountingPeriod::assertOpen($tenant->id, \Illuminate\Support\Carbon::parse($sale->sold_at, $tenant->timezone));
             $now = now($tenant->timezone);
 
             $movements = DB::table('stock_movements')->where('tenant_id', $tenant->id)->where('source_type', 'sale')->where('source_id', $sale->id)->get();

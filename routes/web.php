@@ -11,6 +11,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchasingController;
+use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
@@ -65,6 +66,9 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     });
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->middleware('role:owner,manager')->name('reports.balance-sheet');
     Route::post('/reports/equity', [ReportController::class, 'storeEquity'])->middleware('role:owner')->name('reports.equity.store');
+    Route::get('/reports/periods', [AccountingPeriodController::class, 'index'])->middleware('role:owner,manager')->name('reports.periods');
+    Route::post('/reports/periods/close', [AccountingPeriodController::class, 'close'])->middleware('role:owner')->name('reports.periods.close');
+    Route::post('/reports/periods/reopen', [AccountingPeriodController::class, 'reopen'])->middleware('role:owner')->name('reports.periods.reopen');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');
     Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');

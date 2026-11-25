@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AccountingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -76,6 +77,7 @@ class ExpenseController extends Controller
             $expenseId = (string) Str::uuid();
             $number = $this->nextNumber($tenant->id, $outlet->id, $now);
             $spentAt = Carbon::parse($data['spent_at'], $tenant->timezone)->setTimeFrom($now);
+            AccountingPeriod::assertOpen($tenant->id, $spentAt);
 
             $entryId = (string) Str::uuid();
             DB::table('journal_entries')->insert([
@@ -120,6 +122,7 @@ class ExpenseController extends Controller
             $now = now($tenant->timezone);
             $expense = DB::table('expenses')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $id)->lockForUpdate()->first();
             abort_unless($expense && $expense->status === 'posted', 422, 'Pengeluaran ini tidak bisa dibatalkan.');
+            AccountingPeriod::assertOpen($tenant->id, $expense->spent_at);
             $original = DB::table('journal_entries')->where('id', $expense->journal_entry_id)->first();
             if ($original && $original->status === 'posted') {
                 $reversalId = (string) Str::uuid();

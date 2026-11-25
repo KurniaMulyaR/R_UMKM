@@ -21,19 +21,24 @@ class PosController extends Controller
             ->where('products.tenant_id', $tenant->id)->where('products.is_active', true)->where('product_variants.is_active', true)
             ->whereNull('products.deleted_at')->select('product_variants.id as variant_id', 'products.id as product_id', 'products.name', 'products.sku',
                 'products.track_stock', 'units.symbol as unit_symbol', 'product_categories.name as category_name', 'product_variants.cost_price')->orderBy('products.name')->get();
-        $catalog = $variants->map(function ($row) use ($tenant, $outlet) {
-            $price = DB::table('product_prices')->where('tenant_id', $tenant->id)->where('product_variant_id', $row->variant_id)
-                ->where('price_type', 'retail')->where('is_active', true)->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', now()))
-                ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', now()))
-                ->where(fn ($q) => $q->whereNull('outlet_id')->orWhere('outlet_id', $outlet->id))
-                ->orderByRaw('outlet_id = ? desc', [$outlet->id])->first();
-            $stock = DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('product_variant_id', $row->variant_id)->first();
-            $barcode = DB::table('product_barcodes')->where('tenant_id', $tenant->id)->where('product_variant_id', $row->variant_id)->value('barcode');
+        $variantIds = $variants->pluck('variant_id')->all();
+        $now = now();
+        $prices = DB::table('product_prices')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)
+            ->where('price_type', 'retail')->where('is_active', true)
+            ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
+            ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now))
+            ->where(fn ($q) => $q->whereNull('outlet_id')->orWhere('outlet_id', $outlet->id))
+            ->get()->sortByDesc(fn ($price) => $price->outlet_id === $outlet->id ? 1 : 0)->groupBy('product_variant_id')->map->first();
+        $stocks = DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+            ->whereIn('product_variant_id', $variantIds)->pluck('quantity_on_hand', 'product_variant_id');
+        $barcodes = DB::table('product_barcodes')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)
+            ->pluck('barcode', 'product_variant_id');
+        $catalog = $variants->map(function ($row) use ($prices, $stocks, $barcodes) {
             return (object) [
                 'variant_id' => $row->variant_id, 'product_id' => $row->product_id, 'name' => $row->name,
                 'sku' => $row->sku, 'track_stock' => (bool) $row->track_stock, 'unit_symbol' => $row->unit_symbol,
-                'category_name' => $row->category_name, 'price' => (float) ($price->price ?? 0),
-                'stock' => (float) ($stock->quantity_on_hand ?? 0), 'barcode' => $barcode,
+                'category_name' => $row->category_name, 'price' => (float) ($prices[$row->variant_id]->price ?? 0),
+                'stock' => (float) ($stocks[$row->variant_id] ?? 0), 'barcode' => $barcodes[$row->variant_id] ?? null,
             ];
         })->filter(fn ($item) => $item->price > 0)->values();
         $customers = DB::table('customers')->where('tenant_id', $tenant->id)->where('is_active', true)->whereNull('deleted_at')->orderBy('name')->get();
@@ -104,7 +109,7 @@ class PosController extends Controller
                 if ($discount > $subtotal) throw ValidationException::withMessages(['discount' => 'Diskon tidak boleh melebihi subtotal.']);
                 $total = round($subtotal - $discount, 2);
                 $tenderTotal = round(collect($data['payments'])->sum(fn ($payment) => (float) $payment['amount']), 2);
-                if ($tenderTotal !== $total) throw ValidationException::withMessages(['payments' => 'Jumlah metode bayar harus sama dengan total transaksi.']);
+                if (abs($tenderTotal - $total) > 0.004) throw ValidationException::withMessages(['payments' => 'Jumlah metode bayar harus sama dengan total transaksi.']);
                 $cashReceived = round((float) ($data['cash_received'] ?? 0), 2);
                 if ($cashApplied > 0 && $cashReceived < $cashApplied) throw ValidationException::withMessages(['cash_received' => 'Uang tunai belum cukup.']);
 
@@ -239,9 +244,17 @@ class PosController extends Controller
     private function nextNumber(string $tenantId, string $outletId, string $type): string
     {
         $period = now()->format('Y');
-        $counter = DB::table('document_counters')->where('tenant_id', $tenantId)->where('outlet_id', $outletId)
-            ->where('document_type', $type)->where('period_key', $period)->lockForUpdate()->first();
-        if (! $counter) throw ValidationException::withMessages(['sale' => 'Nomor transaksi belum disiapkan untuk tahun ini.']);
+        $scope = ['tenant_id' => $tenantId, 'outlet_id' => $outletId, 'document_type' => $type, 'period_key' => $period];
+        $counter = DB::table('document_counters')->where($scope)->lockForUpdate()->first();
+        if (! $counter) {
+            $previous = DB::table('document_counters')->where('tenant_id', $tenantId)->where('outlet_id', $outletId)
+                ->where('document_type', $type)->orderByDesc('period_key')->first();
+            DB::table('document_counters')->insertOrIgnore($scope + [
+                'id' => (string) Str::uuid(), 'prefix' => $previous->prefix ?? strtoupper(substr($type, 0, 3)),
+                'next_number' => 1, 'padding' => $previous->padding ?? 5, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $counter = DB::table('document_counters')->where($scope)->lockForUpdate()->first();
+        }
         DB::table('document_counters')->where('id', $counter->id)->update(['next_number' => $counter->next_number + 1, 'updated_at' => now()]);
         return ($counter->prefix ?: strtoupper(substr($type, 0, 3))).'/'.$period.'/'.str_pad((string) $counter->next_number, $counter->padding, '0', STR_PAD_LEFT);
     }
