@@ -16,9 +16,11 @@
         if (($currentRole->key ?? '') === 'owner') {
             $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Pembayaran QRIS', 'href' => route('payment-gateway.edit'), 'icon' => 'wallet', 'active' => request()->routeIs('payment-gateway.*')];
         }
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Outlet', 'href' => route('outlets.index'), 'icon' => 'home', 'active' => request()->routeIs('outlets.*')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Tim usaha', 'href' => route('staff.index'), 'icon' => 'team', 'active' => request()->routeIs('staff.*')];
     }
     if (in_array($currentRole->key ?? '', ['owner', 'manager', 'warehouse'], true)) {
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Transfer stok', 'href' => route('stock-transfers.index'), 'icon' => 'box', 'active' => request()->routeIs('stock-transfers.*')];
         $sidebarLinks[] = ['group' => 'PEMBELIAN', 'label' => 'Pesanan beli', 'href' => route('purchasing.index'), 'icon' => 'receipt', 'active' => request()->routeIs('purchasing.index', 'purchasing.create', 'purchasing.show')];
         if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
             $sidebarLinks[] = ['group' => 'PEMBELIAN', 'label' => 'Umur hutang', 'href' => route('purchasing.aging'), 'icon' => 'clock', 'active' => request()->routeIs('purchasing.aging')];

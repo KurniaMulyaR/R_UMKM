@@ -23,6 +23,8 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\StockCountController;
+use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\OutletController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\ShiftController;
@@ -94,6 +96,23 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/{id}', [StockCountController::class, 'show'])->middleware('role:owner,manager,warehouse')->name('show');
         Route::post('/{id}/approve', [StockCountController::class, 'approve'])->middleware('role:owner,manager')->name('approve');
         Route::post('/{id}/reject', [StockCountController::class, 'reject'])->middleware('role:owner,manager')->name('reject');
+    });
+    Route::prefix('stock-transfers')->name('stock-transfers.')->middleware('role:owner,manager,warehouse')->group(function () {
+        Route::get('/', [StockTransferController::class, 'index'])->name('index');
+        Route::get('/create', [StockTransferController::class, 'create'])->name('create');
+        Route::post('/', [StockTransferController::class, 'store'])->name('store');
+        Route::get('/{id}', [StockTransferController::class, 'show'])->name('show');
+        Route::post('/{id}/receive', [StockTransferController::class, 'receive'])->name('receive');
+        Route::post('/{id}/cancel', [StockTransferController::class, 'cancel'])->name('cancel');
+    });
+    Route::prefix('outlets')->name('outlets.')->group(function () {
+        Route::get('/', [OutletController::class, 'index'])->name('index');
+        Route::post('/switch/{id}', [OutletController::class, 'switch'])->name('switch');
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/', [OutletController::class, 'store'])->name('store');
+            Route::post('/grant', [OutletController::class, 'grant'])->name('grant');
+            Route::post('/revoke', [OutletController::class, 'revoke'])->name('revoke');
+        });
     });
     Route::middleware('role:owner,manager')->prefix('reconciliations')->name('reconciliations.')->group(function () {
         Route::get('/', [ReconciliationController::class, 'index'])->name('index');
