@@ -33,6 +33,15 @@
         <span class="muted">Belum ada riwayat perawatan.</span>
     @endforelse
 </div>
+@if(! $asset->acquisition_journal_entry_id)
+<div class="card section-card"><div class="section-title"><h2>Jurnal perolehan</h2></div>
+    <p class="muted" style="margin-bottom:12px">Aset ini belum masuk jurnal, sehingga belum tampil di neraca.</p>
+    <form method="post" action="{{ route('assets.acquisition.store',$asset->id) }}" class="form-grid" style="align-items:end">@csrf
+        <label>Dibayar dari<select name="funding"><option value="bank_transfer">Rekening bank</option><option value="cash">Kas tunai</option><option value="owner_equity">Modal pemilik (aset disetor)</option></select></label>
+        <button class="btn btn-secondary">Posting jurnal perolehan</button>
+    </form>
+</div>
+@endif
 <div class="card section-card"><div class="section-title"><h2>Jurnal penyusutan</h2></div>
     @forelse($depreciations as $row)<div class="detail-row"><span>{{ $row->period }}</span><b>{{ $rp($row->amount) }}</b></div>@empty<span class="muted">Belum ada penyusutan yang diposting.</span>@endforelse
 </div>

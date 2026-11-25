@@ -21,7 +21,8 @@
         $sidebarLinks[] = ['group' => 'PEMBELIAN', 'label' => 'Supplier', 'href' => route('purchasing.suppliers'), 'icon' => 'wallet', 'active' => request()->routeIs('purchasing.suppliers')];
     }
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
-        $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.*')];
+        $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Neraca', 'href' => route('reports.balance-sheet'), 'icon' => 'wallet', 'active' => request()->routeIs('reports.balance-sheet', 'reports.equity.*')];
+        $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.profit-loss')];
     }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
     $ui = [

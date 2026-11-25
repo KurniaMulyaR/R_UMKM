@@ -45,11 +45,13 @@ class AssetController extends Controller
             'purchase_date' => ['required', 'date', 'before_or_equal:today'], 'purchase_cost' => ['required', 'numeric', 'min:0', 'max:99999999999999'],
             'useful_life_months' => ['required', 'integer', 'min:1', 'max:600'], 'salvage_value' => ['nullable', 'numeric', 'min:0', 'lte:purchase_cost'],
             'maintenance_interval_days' => ['nullable', 'integer', 'min:1', 'max:3650'], 'notes' => ['nullable', 'string', 'max:2000'],
+            'funding' => ['required', 'in:none,cash,bank_transfer,owner_equity'],
         ]);
         $now = now($tenant->timezone);
         $interval = $data['maintenance_interval_days'] ?? null;
+        $assetId = (string) Str::uuid();
         DB::table('business_assets')->insert([
-            'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'code' => $this->nextCode($tenant->id),
+            'id' => $assetId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'code' => $this->nextCode($tenant->id),
             'name' => $data['name'], 'category' => $data['category'], 'serial_number' => $data['serial_number'] ?? null,
             'location' => $data['location'] ?? null, 'purchase_date' => $data['purchase_date'], 'purchase_cost' => $data['purchase_cost'],
             'useful_life_months' => $data['useful_life_months'], 'salvage_value' => $data['salvage_value'] ?? 0,
@@ -59,7 +61,60 @@ class AssetController extends Controller
             'created_at' => $now, 'updated_at' => $now,
         ]);
 
-        return redirect()->route('assets.index')->with('success', 'Aset berhasil dicatat.');
+        if ($data['funding'] !== 'none') {
+            DB::transaction(fn () => $this->postAcquisition($tenant, $outlet, $assetId, $data['funding'], $now), attempts: 3);
+        }
+
+        return redirect()->route('assets.index')->with('success', $data['funding'] === 'none' ? 'Aset berhasil dicatat tanpa jurnal perolehan.' : 'Aset dicatat dan jurnal perolehan diposting.');
+    }
+
+    public function acquisition(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $data = $request->validate(['funding' => ['required', 'in:cash,bank_transfer,owner_equity']]);
+        DB::transaction(fn () => $this->postAcquisition($tenant, $outlet, $id, $data['funding'], now($tenant->timezone)), attempts: 3);
+
+        return back()->with('success', 'Jurnal perolehan aset diposting.');
+    }
+
+    /**
+     * Dr Aset Tetap (1500); Cr kas, bank, atau Modal Pemilik (aset disetor pemilik).
+     */
+    private function postAcquisition(object $tenant, object $outlet, string $assetId, string $funding, $now): void
+    {
+        $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $assetId)->lockForUpdate()->first();
+        abort_unless($asset, 404);
+        abort_if($asset->acquisition_journal_entry_id, 422, 'Jurnal perolehan aset ini sudah diposting.');
+        $cost = round((float) $asset->purchase_cost, 2);
+        if ($cost <= 0) {
+            throw ValidationException::withMessages(['funding' => 'Harga beli nol tidak perlu dijurnal.']);
+        }
+        if ($funding === 'owner_equity') {
+            $creditAccount = $this->systemAccount($tenant->id, '3010', 'Modal Pemilik', 'equity', 'credit', $now);
+        } else {
+            $cashAccount = DB::table('cash_accounts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                ->where('type', $funding === 'cash' ? 'cash' : 'bank')->where('is_active', true)->first();
+            if (! $cashAccount || ! $cashAccount->chart_account_id) {
+                throw ValidationException::withMessages(['funding' => 'Akun kas atau bank belum disiapkan.']);
+            }
+            $creditAccount = (object) ['id' => $cashAccount->chart_account_id];
+        }
+        $fixedAssets = $this->systemAccount($tenant->id, '1500', 'Aset Tetap', 'asset', 'debit', $now);
+        $entryId = (string) Str::uuid();
+        DB::table('journal_entries')->insert([
+            'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'ACQ-'.$asset->code,
+            'entry_date' => $asset->purchase_date, 'status' => 'posted', 'description' => 'Perolehan aset '.$asset->name,
+            'source_type' => 'asset_acquisition', 'source_id' => $asset->id, 'idempotency_key' => 'asset-acquisition:'.$asset->id,
+            'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        foreach ([[$fixedAssets->id, $cost, 0], [$creditAccount->id, 0, $cost]] as [$accountId, $debit, $credit]) {
+            DB::table('journal_lines')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $entryId, 'account_id' => $accountId,
+                'description' => 'Perolehan '.$asset->code, 'debit' => $debit, 'credit' => $credit, 'created_at' => $now, 'updated_at' => $now,
+            ]);
+        }
+        DB::table('business_assets')->where('id', $asset->id)->update(['acquisition_journal_entry_id' => $entryId, 'updated_at' => $now]);
     }
 
     /**

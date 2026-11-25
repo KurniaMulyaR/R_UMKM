@@ -63,6 +63,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
         Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
     });
+    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->middleware('role:owner,manager')->name('reports.balance-sheet');
+    Route::post('/reports/equity', [ReportController::class, 'storeEquity'])->middleware('role:owner')->name('reports.equity.store');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');
     Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');
@@ -73,6 +75,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/', [AssetController::class, 'index'])->name('index');
         Route::post('/', [AssetController::class, 'store'])->name('store');
         Route::post('/depreciation', [AssetController::class, 'postDepreciation'])->name('depreciation.store');
+        Route::post('/{id}/acquisition', [AssetController::class, 'acquisition'])->name('acquisition.store');
         Route::get('/{id}', [AssetController::class, 'show'])->name('show');
         Route::post('/{id}/maintenance', [AssetController::class, 'storeMaintenance'])->name('maintenance.store');
         Route::post('/{id}/dispose', [AssetController::class, 'dispose'])->name('dispose');

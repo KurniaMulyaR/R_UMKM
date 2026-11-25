@@ -56,7 +56,7 @@ class PurchasingTest extends TestCase
         $balance = DB::table('stock_balances')->first();
         $this->assertEquals(14.0, (float) $balance->quantity_on_hand);
         $this->assertEquals(148000.0, (float) $balance->inventory_value);
-        $this->assertEquals(48000.0, $this->balance('1100'));
+        $this->assertEquals(148000.0, $this->balance('1100'));
         $this->assertEquals(-48000.0, $this->balance('2010'));
 
         $bill = DB::table('supplier_bills')->first();

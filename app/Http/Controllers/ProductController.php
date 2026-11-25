@@ -79,6 +79,35 @@ class ProductController extends Controller
                 'value_delta' => $opening * (float) ($data['cost_price'] ?? 0), 'source_type' => 'product_opening', 'source_id' => $productId,
                 'idempotency_key' => 'opening:'.$variantId, 'created_by_user_id' => auth()->id(), 'reason' => 'Stok awal produk', 'created_at' => $now, 'updated_at' => $now,
             ]);
+            $openingValue = round($opening * (float) ($data['cost_price'] ?? 0), 2);
+            if ($openingValue > 0) {
+                $inventoryAccount = DB::table('chart_of_accounts')->where('tenant_id', $tenant->id)->where('code', '1100')->first();
+                $equityAccount = DB::table('chart_of_accounts')->where('tenant_id', $tenant->id)->where('code', '3010')->first();
+                if (! $equityAccount) {
+                    $equityId = (string) Str::uuid();
+                    DB::table('chart_of_accounts')->insert([
+                        'id' => $equityId, 'tenant_id' => $tenant->id, 'code' => '3010', 'name' => 'Modal Pemilik', 'account_type' => 'equity',
+                        'normal_balance' => 'credit', 'is_system' => true, 'allow_manual_posting' => false, 'is_active' => true, 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    $equityAccount = (object) ['id' => $equityId];
+                }
+                if ($inventoryAccount) {
+                    $entryId = (string) Str::uuid();
+                    DB::table('journal_entries')->insert([
+                        'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'OPN-'.Str::upper(Str::random(8)),
+                        'entry_date' => $now->toDateString(), 'status' => 'posted', 'description' => 'Stok awal '.$data['name'], 'source_type' => 'product_opening',
+                        'source_id' => $productId, 'idempotency_key' => 'opening:'.$variantId.':journal', 'posted_at' => $now,
+                        'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    foreach ([[$inventoryAccount->id, $openingValue, 0], [$equityAccount->id, 0, $openingValue]] as [$accountId, $debit, $credit]) {
+                        DB::table('journal_lines')->insert([
+                            'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $entryId, 'account_id' => $accountId,
+                            'product_variant_id' => $variantId, 'description' => 'Stok awal '.$data['name'], 'debit' => $debit, 'credit' => $credit,
+                            'created_at' => $now, 'updated_at' => $now,
+                        ]);
+                    }
+                }
+            }
         });
 
         return redirect()->route('products.index')->with('success', 'Produk berhasil ditambahkan.');

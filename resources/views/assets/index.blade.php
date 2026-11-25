@@ -26,6 +26,7 @@
             <label>Umur pakai (bulan)<input type="number" name="useful_life_months" required min="1" max="600" value="{{ old('useful_life_months', 60) }}"></label>
             <label>Nilai sisa <span class="optional">opsional</span><input type="number" name="salvage_value" min="0" step="1" value="{{ old('salvage_value', 0) }}"></label>
             <label>Servis tiap (hari) <span class="optional">opsional</span><input type="number" name="maintenance_interval_days" min="1" max="3650" value="{{ old('maintenance_interval_days') }}"></label>
+            <label>Pembelian dibayar dari<select name="funding"><option value="bank_transfer" @selected(old('funding') === 'bank_transfer')>Rekening bank</option><option value="cash" @selected(old('funding') === 'cash')>Kas tunai</option><option value="owner_equity" @selected(old('funding') === 'owner_equity')>Modal pemilik (aset disetor)</option><option value="none" @selected(old('funding') === 'none')>Jangan buat jurnal</option></select></label>
             <label>Lokasi <span class="optional">opsional</span><input name="location" maxlength="160" value="{{ old('location') }}"></label>
             <label>Nomor seri <span class="optional">opsional</span><input name="serial_number" maxlength="128" value="{{ old('serial_number') }}"></label>
         </div>
