@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FeatureHubController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
@@ -59,6 +60,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/orders', [PurchasingController::class, 'store'])->name('store');
         Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
         Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
+    });
+    Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
+        Route::get('/', [ExpenseController::class, 'index'])->name('index');
+        Route::post('/', [ExpenseController::class, 'store'])->name('store');
+        Route::post('/{id}/void', [ExpenseController::class, 'void'])->name('void');
     });
     Route::middleware('role:owner,manager')->prefix('assets')->name('assets.')->group(function () {
         Route::get('/', [AssetController::class, 'index'])->name('index');
