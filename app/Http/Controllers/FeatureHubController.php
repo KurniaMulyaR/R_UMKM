@@ -14,7 +14,7 @@ class FeatureHubController extends Controller
                 'features' => [
                     ['name' => 'Kasir & pembayaran', 'status' => 'Sebagian', 'summary' => 'POS, diskon, split tender, tunai, transfer, QRIS manual, dan kasbon. Gateway QRIS belum terhubung.'],
                     ['name' => 'Katalog produk & barcode', 'status' => 'Sebagian', 'summary' => 'Tambah/edit produk, harga, barcode, kategori, dan arsip. Varian lanjutan dan konversi satuan belum ada.'],
-                    ['name' => 'Persediaan & stok', 'status' => 'Sebagian', 'summary' => 'Stok awal dan mutasi penjualan tercatat. Opname, penyesuaian, transfer antar-outlet, dan retur stok belum tersedia.'],
+                    ['name' => 'Persediaan & stok', 'status' => 'Sebagian', 'summary' => 'Stok awal, mutasi penjualan/pembelian/retur, dan opname dengan persetujuan serta jurnal selisih. Transfer antar-outlet dan penyesuaian massal belum ada.'],
                     ['name' => 'Pelanggan & piutang', 'status' => 'Sebagian', 'summary' => 'Data pelanggan dan pelunasan kasbon dasar tersedia. Aging piutang, limit kredit, dan reminder belum ada.'],
                     ['name' => 'Shift kasir', 'status' => 'Ada', 'summary' => 'Buka/tutup shift dan hitung selisih kas dasar.'],
                     ['name' => 'Transaksi, void & retur', 'status' => 'Sebagian', 'summary' => 'Riwayat transaksi, void pemilik, serta pembalikan stok/jurnal. Alur retur dan refund penuh belum ada.'],
@@ -30,8 +30,8 @@ class FeatureHubController extends Controller
                     ['name' => 'Tagihan & pembayaran supplier', 'status' => 'Ada', 'summary' => 'Tagihan otomatis saat barang diterima, pembayaran bertahap, retur pembelian termasuk refund atas tagihan yang sudah dibayar, dan laporan umur hutang.'],
                     ['name' => 'Invoice, surat jalan & kwitansi', 'status' => 'Belum dibangun', 'summary' => 'Dokumen pesanan, pemenuhan, invoice, bukti terima, dan cetak.'],
                     ['name' => 'Pengeluaran & rekonsiliasi kas/bank', 'status' => 'Sebagian', 'summary' => 'Pencatatan biaya per kategori dengan jurnal, pembatalan, untung bersih bulanan, dan pengurang kas saat tutup shift sudah ada. Mutasi kas, settlement, dan rekonsiliasi belum.'],
-                    ['name' => 'COA, jurnal & tutup periode', 'status' => 'Sebagian', 'summary' => 'Laporan laba rugi dan neraca dari jurnal, serta pencatatan modal/prive pemilik sudah ada. Jurnal penjualan dan akun bawaan tercatat. Pengelolaan akun dan tutup periode belum ada.'],
-                    ['name' => 'Laporan usaha', 'status' => 'Belum dibangun', 'summary' => 'Laporan penjualan, laba-rugi, arus kas, stok, hutang, dan piutang per periode/outlet.'],
+                    ['name' => 'COA, jurnal & tutup periode', 'status' => 'Sebagian', 'summary' => 'COA sistem, jurnal otomatis, tutup/buka periode dengan kunci posting. Jurnal manual dan editor COA belum ada.'],
+                    ['name' => 'Laporan usaha', 'status' => 'Sebagian', 'summary' => 'Laba rugi dan neraca dari jurnal, umur hutang. Arus kas, buku besar, dan ekspor PDF/Excel belum ada.'],
                 ],
             ],
             [

@@ -13,6 +13,7 @@ use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\ShiftController;
@@ -63,6 +64,14 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/orders', [PurchasingController::class, 'store'])->name('store');
         Route::get('/orders/{id}', [PurchasingController::class, 'show'])->name('show');
         Route::post('/orders/{id}/receive', [PurchasingController::class, 'receive'])->name('receive');
+    });
+    Route::prefix('stock-counts')->name('stock-counts.')->group(function () {
+        Route::get('/', [StockCountController::class, 'index'])->middleware('role:owner,manager,warehouse')->name('index');
+        Route::get('/create', [StockCountController::class, 'create'])->middleware('role:owner,manager,warehouse')->name('create');
+        Route::post('/', [StockCountController::class, 'store'])->middleware('role:owner,manager,warehouse')->name('store');
+        Route::get('/{id}', [StockCountController::class, 'show'])->middleware('role:owner,manager,warehouse')->name('show');
+        Route::post('/{id}/approve', [StockCountController::class, 'approve'])->middleware('role:owner,manager')->name('approve');
+        Route::post('/{id}/reject', [StockCountController::class, 'reject'])->middleware('role:owner,manager')->name('reject');
     });
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->middleware('role:owner,manager')->name('reports.balance-sheet');
     Route::post('/reports/equity', [ReportController::class, 'storeEquity'])->middleware('role:owner')->name('reports.equity.store');
