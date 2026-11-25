@@ -12,6 +12,9 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\AccountingPeriodController;
+use App\Http\Controllers\ChartOfAccountsController;
+use App\Http\Controllers\JournalController;
+use App\Http\Controllers\LedgerController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\SalesController;
@@ -72,6 +75,18 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/{id}', [StockCountController::class, 'show'])->middleware('role:owner,manager,warehouse')->name('show');
         Route::post('/{id}/approve', [StockCountController::class, 'approve'])->middleware('role:owner,manager')->name('approve');
         Route::post('/{id}/reject', [StockCountController::class, 'reject'])->middleware('role:owner,manager')->name('reject');
+    });
+    Route::get('/ledger', [LedgerController::class, 'index'])->middleware('role:owner,manager')->name('ledger.index');
+    Route::get('/accounts', [ChartOfAccountsController::class, 'index'])->middleware('role:owner,manager')->name('accounts.index');
+    Route::post('/accounts', [ChartOfAccountsController::class, 'store'])->middleware('role:owner')->name('accounts.store');
+    Route::prefix('journals')->name('journals.')->group(function () {
+        Route::get('/', [JournalController::class, 'index'])->middleware('role:owner,manager')->name('index');
+        Route::get('/create', [JournalController::class, 'create'])->middleware('role:owner')->name('create');
+        Route::post('/', [JournalController::class, 'store'])->middleware('role:owner')->name('store');
+        Route::get('/import', [JournalController::class, 'importForm'])->middleware('role:owner')->name('import');
+        Route::get('/import/template', [JournalController::class, 'template'])->middleware('role:owner')->name('template');
+        Route::post('/import', [JournalController::class, 'import'])->middleware('role:owner')->name('import.store');
+        Route::get('/{id}', [JournalController::class, 'show'])->middleware('role:owner,manager')->name('show');
     });
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->middleware('role:owner,manager')->name('reports.balance-sheet');
     Route::post('/reports/equity', [ReportController::class, 'storeEquity'])->middleware('role:owner')->name('reports.equity.store');
