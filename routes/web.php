@@ -15,6 +15,7 @@ use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\JournalController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\SalesController;
@@ -75,6 +76,13 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/{id}', [StockCountController::class, 'show'])->middleware('role:owner,manager,warehouse')->name('show');
         Route::post('/{id}/approve', [StockCountController::class, 'approve'])->middleware('role:owner,manager')->name('approve');
         Route::post('/{id}/reject', [StockCountController::class, 'reject'])->middleware('role:owner,manager')->name('reject');
+    });
+    Route::middleware('role:owner,manager')->prefix('reconciliations')->name('reconciliations.')->group(function () {
+        Route::get('/', [ReconciliationController::class, 'index'])->name('index');
+        Route::post('/', [ReconciliationController::class, 'store'])->name('store');
+        Route::get('/{id}', [ReconciliationController::class, 'show'])->name('show');
+        Route::put('/{id}', [ReconciliationController::class, 'update'])->name('update');
+        Route::delete('/{id}', [ReconciliationController::class, 'destroy'])->name('destroy');
     });
     Route::get('/ledger', [LedgerController::class, 'index'])->middleware('role:owner,manager')->name('ledger.index');
     Route::get('/accounts', [ChartOfAccountsController::class, 'index'])->middleware('role:owner,manager')->name('accounts.index');

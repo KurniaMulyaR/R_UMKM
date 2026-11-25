@@ -29,7 +29,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Supplier, PO & penerimaan barang', 'status' => 'Ada', 'summary' => 'Master supplier, pesanan pembelian dengan persetujuan, penerimaan sebagian, dan biaya rata-rata bergerak. Retur pembelian belum ada.'],
                     ['name' => 'Tagihan & pembayaran supplier', 'status' => 'Ada', 'summary' => 'Tagihan otomatis saat barang diterima, pembayaran bertahap, retur pembelian termasuk refund atas tagihan yang sudah dibayar, dan laporan umur hutang.'],
                     ['name' => 'Invoice, surat jalan & kwitansi', 'status' => 'Belum dibangun', 'summary' => 'Dokumen pesanan, pemenuhan, invoice, bukti terima, dan cetak.'],
-                    ['name' => 'Pengeluaran & rekonsiliasi kas/bank', 'status' => 'Sebagian', 'summary' => 'Pencatatan biaya per kategori dengan jurnal, pembatalan, untung bersih bulanan, dan pengurang kas saat tutup shift sudah ada. Mutasi kas, settlement, dan rekonsiliasi belum.'],
+                    ['name' => 'Pengeluaran & rekonsiliasi kas/bank', 'status' => 'Ada', 'summary' => 'Biaya operasional per kategori terhubung shift dan jurnal, plus rekonsiliasi kas/bank/QRIS terhadap saldo rekening.'],
                     ['name' => 'COA, jurnal & tutup periode', 'status' => 'Ada', 'summary' => 'COA sistem + akun sendiri, jurnal otomatis dan manual, import jurnal CSV, buku besar, tutup/buka periode dengan kunci posting.'],
                     ['name' => 'Laporan usaha', 'status' => 'Sebagian', 'summary' => 'Laba rugi, neraca, buku besar, umur hutang. Arus kas dan ekspor PDF/Excel belum ada.'],
                 ],
