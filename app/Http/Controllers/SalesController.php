@@ -38,7 +38,7 @@ class SalesController extends Controller
         $items = DB::table('sale_items')->where('tenant_id', $tenant->id)->where('sale_id', $sale->id)->get();
         $payments = DB::table('payment_allocations')->join('payments', 'payments.id', '=', 'payment_allocations.payment_id')
             ->where('payment_allocations.tenant_id', $tenant->id)->where('payment_allocations.sale_id', $sale->id)
-            ->select('payments.method', 'payments.status', 'payment_allocations.amount', 'payments.received_at')->get();
+            ->select('payments.id', 'payments.method', 'payments.status', 'payment_allocations.amount', 'payments.received_at')->get();
         $journal = DB::table('journal_entries')->where('tenant_id', $tenant->id)->where('source_type', 'sale')->where('source_id', $sale->id)->first();
         $isOwner = DB::table('tenant_user_roles')->join('roles', 'roles.id', '=', 'tenant_user_roles.role_id')
             ->where('tenant_user_roles.tenant_user_id', $request->attributes->get('tenant_membership')->id)
