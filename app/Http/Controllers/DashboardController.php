@@ -17,7 +17,7 @@ class DashboardController extends Controller
         $sales = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->where('status', 'completed')->whereDate('sold_at', $day);
         $summary = [
-            'revenue' => (clone $sales)->sum('grand_total'),
+            'revenue' => (clone $sales)->sum(DB::raw('grand_total - returned_total')),
             'transactions' => (clone $sales)->count(),
             'gross_profit' => DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')
                 ->where('sales.tenant_id', $tenant->id)->where('sales.outlet_id', $outlet->id)
@@ -27,7 +27,7 @@ class DashboardController extends Controller
         $weekStart = Carbon::now($tenant->timezone)->subDays(6)->startOfDay();
         $dailySales = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->where('status', 'completed')->whereBetween('sold_at', [$weekStart, Carbon::now($tenant->timezone)->endOfDay()])
-            ->selectRaw('DATE(sold_at) as sale_date, SUM(grand_total) as revenue, COUNT(*) as transactions')
+            ->selectRaw('DATE(sold_at) as sale_date, SUM(grand_total - returned_total) as revenue, COUNT(*) as transactions')
             ->groupByRaw('DATE(sold_at)')->get()->keyBy('sale_date');
         $weeklyActivity = collect(range(6, 0))->map(function (int $daysAgo) use ($tenant, $dailySales) {
             $date = Carbon::now($tenant->timezone)->subDays($daysAgo);
@@ -90,7 +90,7 @@ class DashboardController extends Controller
         $trendStart = Carbon::now($tz)->subDays(29)->startOfDay();
         $trendRows = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('status', 'completed')
             ->whereBetween('sold_at', [$trendStart, Carbon::now($tz)->endOfDay()])
-            ->selectRaw('DATE(sold_at) as d, SUM(grand_total) as revenue')->groupByRaw('DATE(sold_at)')->pluck('revenue', 'd');
+            ->selectRaw('DATE(sold_at) as d, SUM(grand_total - returned_total) as revenue')->groupByRaw('DATE(sold_at)')->pluck('revenue', 'd');
         $trend = collect(range(29, 0))->map(function (int $ago) use ($tz, $trendRows) {
             $date = Carbon::now($tz)->subDays($ago);
 
@@ -115,7 +115,7 @@ class DashboardController extends Controller
                 'number' => $sale->sale_number, 'url' => route('sales.show', $sale->id),
                 'customer' => $sale->customer_name ?: 'Pelanggan umum',
                 'time' => Carbon::parse($sale->sold_at)->format('d M, H:i'),
-                'total' => (float) $sale->grand_total, 'credit' => (float) $sale->paid_total < (float) $sale->grand_total,
+                'total' => (float) $sale->grand_total, 'credit' => (float) $sale->paid_total < (float) $sale->grand_total - (float) $sale->returned_total,
             ])->values(),
             'shiftOpen' => $shiftOpen,
             'urls' => ['pos' => route('pos.index'), 'sales' => route('sales.index'), 'products' => route('products.index'), 'shifts' => route('shifts.index'), 'customers' => route('customers.index'), 'features' => route('features.index')],

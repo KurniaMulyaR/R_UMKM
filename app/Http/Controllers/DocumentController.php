@@ -20,7 +20,7 @@ class DocumentController extends Controller
 
         return view('documents.invoice', [
             'tenant' => $tenant, 'outlet' => $outlet, 'sale' => $sale, 'number' => $number, 'items' => $this->items($tenant->id, $sale->id),
-            'payments' => $payments, 'balanceDue' => max(0.0, round((float) $sale->grand_total - (float) $payments->sum('amount'), 2)),
+            'payments' => $payments, 'balanceDue' => max(0.0, round((float) $sale->grand_total - (float) $sale->returned_total - (float) $payments->sum('amount'), 2)),
         ]);
     }
 

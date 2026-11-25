@@ -20,6 +20,7 @@ use App\Http\Controllers\PaymentGatewayController;
 use App\Http\Controllers\QrisChargeController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\StockCountController;
 use App\Http\Controllers\SalesController;
@@ -69,6 +70,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post('/shifts/close', [ShiftController::class, 'close'])->name('shifts.close');
     Route::get('/sales', [SalesController::class, 'index'])->name('sales.index');
     Route::get('/sales/{id}', [SalesController::class, 'show'])->name('sales.show');
+    Route::get('/sales/{id}/return', [SaleReturnController::class, 'create'])->middleware('role:owner,manager')->name('sales.return.create');
+    Route::post('/sales/{id}/return', [SaleReturnController::class, 'store'])->middleware('role:owner,manager')->name('sales.return.store');
     Route::get('/sales/{id}/invoice', [DocumentController::class, 'invoice'])->name('documents.invoice');
     Route::get('/sales/{id}/delivery-note', [DocumentController::class, 'deliveryNote'])->name('documents.delivery-note');
     Route::get('/sales/{id}/receipts/{paymentId}', [DocumentController::class, 'receipt'])->name('documents.receipt');

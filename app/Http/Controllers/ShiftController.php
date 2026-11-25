@@ -56,7 +56,8 @@ class ShiftController extends Controller
             ->where('payments.tenant_id', $tenant->id)->where('payments.cash_shift_id', $shift->id)->where('payments.method', 'cash')
             ->where('payments.status', 'confirmed')->whereNotNull('payment_allocations.supplier_bill_id')->sum('payment_allocations.amount');
         $cashRefunds = (float) DB::table('purchase_return_refunds')->where('tenant_id', $tenant->id)->where('cash_shift_id', $shift->id)->where('method', 'cash')->sum('amount');
-        $expected = (float) $shift->opening_cash + (float) $cashSales - $cashExpenses - $cashSupplierPayments + $cashRefunds;
+        $cashSaleReturns = (float) DB::table('sale_returns')->where('tenant_id', $tenant->id)->where('cash_shift_id', $shift->id)->where('refund_method', 'cash')->sum('cash_refund_amount');
+        $expected = (float) $shift->opening_cash + (float) $cashSales - $cashExpenses - $cashSupplierPayments + $cashRefunds - $cashSaleReturns;
         DB::table('cash_shifts')->where('id', $shift->id)->update([
             'closed_at' => now($tenant->timezone), 'expected_cash' => $expected,
             'counted_cash' => $data['counted_cash'], 'cash_difference' => (float) $data['counted_cash'] - $expected,

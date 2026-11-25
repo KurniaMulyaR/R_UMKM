@@ -61,6 +61,7 @@ class SalesController extends Controller
         DB::transaction(function () use ($tenant, $outlet, $id, $data) {
             $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $id)->lockForUpdate()->first();
             abort_unless($sale && $sale->status === 'completed', 422, 'Transaksi ini tidak dapat dibatalkan.');
+            abort_if((float) $sale->returned_total > 0, 422, 'Transaksi ini sudah punya retur, jadi tidak bisa dibatalkan penuh.');
             AccountingPeriod::assertOpen($tenant->id, \Illuminate\Support\Carbon::parse($sale->sold_at, $tenant->timezone));
             $now = now($tenant->timezone);
 
@@ -162,7 +163,7 @@ class SalesController extends Controller
                 ->where('id', $id)->lockForUpdate()->first();
             abort_unless($sale && in_array($sale->status, ['completed', 'partially_returned'], true), 404);
             $amount = round((float) $data['amount'], 2);
-            $balanceDue = round((float) $sale->grand_total - (float) $sale->paid_total, 2);
+            $balanceDue = round((float) $sale->grand_total - (float) $sale->returned_total - (float) $sale->paid_total, 2);
             if ($amount > $balanceDue) throw ValidationException::withMessages(['amount' => 'Nominal melebihi sisa kasbon.']);
 
             $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)

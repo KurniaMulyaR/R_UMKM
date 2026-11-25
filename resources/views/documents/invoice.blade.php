@@ -18,6 +18,7 @@
     <tr><td>Subtotal</td><td class="num">{{ $rp($sale->subtotal) }}</td></tr>
     @if((float) $sale->discount_total > 0)<tr><td>Diskon</td><td class="num">− {{ $rp($sale->discount_total) }}</td></tr>@endif
     <tr class="grand"><td>Total</td><td class="num">{{ $rp($sale->grand_total) }}</td></tr>
+    @if((float) $sale->returned_total > 0)<tr><td>Retur</td><td class="num">− {{ $rp($sale->returned_total) }}</td></tr>@endif
     <tr><td>Sudah dibayar</td><td class="num">{{ $rp($payments->sum('amount')) }}</td></tr>
     <tr><td><b>Sisa tagihan</b></td><td class="num"><b>{{ $rp($balanceDue) }}</b></td></tr>
 </tbody></table>

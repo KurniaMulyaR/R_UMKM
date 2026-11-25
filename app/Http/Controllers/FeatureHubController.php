@@ -17,7 +17,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Persediaan & stok', 'status' => 'Sebagian', 'summary' => 'Stok awal, mutasi penjualan/pembelian/retur, dan opname dengan persetujuan serta jurnal selisih. Transfer antar-outlet dan penyesuaian massal belum ada.'],
                     ['name' => 'Pelanggan & piutang', 'status' => 'Sebagian', 'summary' => 'Data pelanggan dan pelunasan kasbon dasar tersedia. Aging piutang, limit kredit, dan reminder belum ada.'],
                     ['name' => 'Shift kasir', 'status' => 'Ada', 'summary' => 'Buka/tutup shift dan hitung selisih kas dasar.'],
-                    ['name' => 'Transaksi, void & retur', 'status' => 'Sebagian', 'summary' => 'Riwayat transaksi, void pemilik, serta pembalikan stok/jurnal. Alur retur dan refund penuh belum ada.'],
+                    ['name' => 'Transaksi, void & retur', 'status' => 'Ada', 'summary' => 'Riwayat transaksi, void dengan jurnal pembalik, dan retur penjualan sebagian/penuh (stok, kasbon, refund, shift).'],
                     ['name' => 'Dashboard & laporan', 'status' => 'Sebagian', 'summary' => 'Ringkasan omzet, transaksi, perkiraan laba kotor, stok menipis, dan transaksi terbaru. Laporan periodik belum ada.'],
                     ['name' => 'Tenant, outlet & hak akses', 'status' => 'Sebagian', 'summary' => 'Akun usaha, outlet awal, dan peran dasar. Pengelolaan banyak outlet serta permission granular belum ada.'],
                     ['name' => 'Audit & event transaksi', 'status' => 'Sebagian', 'summary' => 'Audit log dan outbox untuk transaksi inti. Viewer audit dan pemrosesan event terjadwal belum ada.'],
