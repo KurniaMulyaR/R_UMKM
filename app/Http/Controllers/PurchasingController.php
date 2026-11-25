@@ -317,8 +317,12 @@ class PurchasingController extends Controller
             $sequence = DB::table('payment_allocations')->where('tenant_id', $tenant->id)->where('supplier_bill_id', $bill->id)->count() + 1;
             $paymentNumber = 'PAYS-'.$bill->bill_number.'-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
             $paymentId = (string) Str::uuid();
+            $openShift = $data['method'] === 'cash'
+                ? DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                    ->where('cashier_user_id', auth()->id())->where('status', 'open')->first()
+                : null;
             DB::table('payments')->insert([
-                'id' => $paymentId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'cash_account_id' => $cashAccount->id,
+                'id' => $paymentId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'cash_shift_id' => $openShift?->id, 'cash_account_id' => $cashAccount->id,
                 'confirmed_by_user_id' => auth()->id(), 'payment_number' => $paymentNumber, 'method' => $data['method'], 'status' => 'confirmed',
                 'amount' => $amount, 'received_at' => $now, 'confirmed_at' => $now, 'idempotency_key' => 'supplier-bill:'.$bill->id.':'.$sequence,
                 'created_at' => $now, 'updated_at' => $now,

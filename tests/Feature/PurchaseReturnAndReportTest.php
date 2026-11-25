@@ -55,14 +55,37 @@ class PurchaseReturnAndReportTest extends TestCase
         $this->assertSame(1, DB::table('purchase_returns')->count());
     }
 
-    public function test_return_larger_than_unpaid_balance_is_rejected(): void
+    public function test_return_on_paid_bill_creates_refund_that_can_be_received(): void
+    {
+        $bill = $this->receivedBill();
+        $item = DB::table('supplier_bill_items')->first();
+        $this->post(route('purchasing.pay', $bill->id), ['method' => 'bank_transfer', 'amount' => 120000]);
+        $this->assertSame('paid', DB::table('supplier_bills')->value('status'));
+
+        $this->post(route('purchasing.return.store', $bill->id), ['quantities' => [$item->id => 5], 'reason' => 'Rusak'])->assertRedirect();
+        $return = DB::table('purchase_returns')->first();
+        $this->assertEquals(60000.0, (float) $return->refund_due);
+        $this->assertEquals(60000.0, $this->balance('1210'));
+        $this->assertEquals(0.0, (float) DB::table('supplier_bills')->value('balance_due'));
+
+        $this->post(route('purchasing.return.refund', $return->id), ['method' => 'cash', 'amount' => 70000])->assertSessionHasErrors('amount');
+        $this->post(route('purchasing.return.refund', $return->id), ['method' => 'cash', 'amount' => 60000])->assertRedirect();
+        $this->assertEquals(0.0, $this->balance('1210'));
+        $this->assertEquals(60000.0, (float) DB::table('purchase_returns')->value('refunded_total'));
+    }
+
+    public function test_return_spanning_balance_and_refund_splits_the_journal(): void
     {
         $bill = $this->receivedBill();
         $item = DB::table('supplier_bill_items')->first();
         $this->post(route('purchasing.pay', $bill->id), ['method' => 'cash', 'amount' => 100000]);
 
-        $this->post(route('purchasing.return.store', $bill->id), ['quantities' => [$item->id => 5], 'reason' => 'Rusak'])->assertSessionHasErrors('quantities');
-        $this->assertSame(0, DB::table('purchase_returns')->count());
+        $this->post(route('purchasing.return.store', $bill->id), ['quantities' => [$item->id => 5], 'reason' => 'Rusak'])->assertRedirect();
+
+        $this->assertEquals(40000.0, (float) DB::table('purchase_returns')->value('refund_due'));
+        $this->assertEquals(0.0, $this->balance('2010'));
+        $this->assertEquals(40000.0, $this->balance('1210'));
+        $this->assertEquals(60000.0, (float) DB::table('supplier_bills')->value('total'));
     }
 
     public function test_aging_and_profit_loss_pages_render_from_journals(): void

@@ -37,7 +37,7 @@ class PurchaseReturnController extends Controller
         $orderId = DB::transaction(function () use ($tenant, $outlet, $billId, $data) {
             $now = now($tenant->timezone);
             $bill = DB::table('supplier_bills')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $billId)->lockForUpdate()->first();
-            abort_unless($bill && in_array($bill->status, ['open', 'partial'], true), 422, 'Tagihan ini sudah lunas, retur belum bisa dicatat.');
+            abort_unless($bill, 404);
             $returnable = $this->returnableItems($tenant->id, $billId)->keyBy('id');
 
             $lines = [];
@@ -61,16 +61,16 @@ class PurchaseReturnController extends Controller
             if ($lines === []) {
                 throw ValidationException::withMessages(['quantities' => 'Isi jumlah barang yang diretur.']);
             }
-            if (round($total, 2) > round((float) $bill->balance_due, 2)) {
-                throw ValidationException::withMessages(['quantities' => 'Nilai retur melebihi sisa tagihan. Refund dari supplier untuk tagihan yang sudah dibayar belum didukung.']);
-            }
+            $total = round($total, 2);
+            $payableReduction = min($total, max(0.0, round((float) $bill->balance_due, 2)));
+            $refundDue = round($total - $payableReduction, 2);
 
             $returnId = (string) Str::uuid();
             $number = $this->nextNumber($tenant->id, $outlet->id, $now);
             DB::table('purchase_returns')->insert([
                 'id' => $returnId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'supplier_id' => $bill->supplier_id,
                 'supplier_bill_id' => $bill->id, 'return_number' => $number, 'status' => 'posted', 'returned_at' => $now,
-                'total' => $total, 'reason' => $data['reason'], 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+                'total' => $total, 'refund_due' => $refundDue, 'refunded_total' => 0, 'reason' => $data['reason'], 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
             ]);
 
             foreach ($lines as [$item, $quantity, $value]) {
@@ -94,7 +94,14 @@ class PurchaseReturnController extends Controller
                 'source_type' => 'purchase_return', 'source_id' => $returnId, 'idempotency_key' => 'purchase-return:'.$returnId.':journal',
                 'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
             ]);
-            foreach ([[$payable->id, $total, 0], [$inventory->id, 0, $total]] as [$accountId, $debit, $credit]) {
+            $journalLines = [[$inventory->id, 0, $total]];
+            if ($payableReduction > 0) {
+                $journalLines[] = [$payable->id, $payableReduction, 0];
+            }
+            if ($refundDue > 0) {
+                $journalLines[] = [$this->refundReceivableAccount($tenant->id, $now)->id, $refundDue, 0];
+            }
+            foreach ($journalLines as [$accountId, $debit, $credit]) {
                 DB::table('journal_lines')->insert([
                     'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $entryId, 'account_id' => $accountId,
                     'supplier_id' => $bill->supplier_id, 'description' => 'Retur pembelian '.$number, 'debit' => round($debit, 2),
@@ -103,7 +110,7 @@ class PurchaseReturnController extends Controller
             }
 
             $newTotal = round((float) $bill->total - $total, 2);
-            $newBalance = round($newTotal - (float) $bill->paid_total, 2);
+            $newBalance = max(0.0, round($newTotal - (float) $bill->paid_total, 2));
             DB::table('supplier_bills')->where('id', $bill->id)->update([
                 'total' => $newTotal, 'subtotal' => round((float) $bill->subtotal - $total, 2), 'balance_due' => $newBalance,
                 'status' => $newBalance <= 0 ? 'paid' : ((float) $bill->paid_total > 0 ? 'partial' : 'open'), 'updated_at' => $now,
@@ -111,13 +118,87 @@ class PurchaseReturnController extends Controller
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(),
                 'action' => 'purchase_return.created', 'subject_type' => 'supplier_bill', 'subject_id' => $bill->id,
-                'after' => json_encode(['return' => $number, 'total' => $total]), 'reason' => $data['reason'], 'occurred_at' => $now, 'created_at' => $now,
+                'after' => json_encode(['return' => $number, 'total' => $total, 'refund_due' => $refundDue]), 'reason' => $data['reason'], 'occurred_at' => $now, 'created_at' => $now,
             ]);
 
             return $bill->purchase_order_id;
         }, attempts: 3);
 
         return redirect()->route($orderId ? 'purchasing.show' : 'purchasing.index', $orderId ? [$orderId] : [])->with('success', 'Retur pembelian dicatat. Stok berkurang dan tagihan supplier disesuaikan.');
+    }
+
+    public function refund(Request $request, string $returnId): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $data = $request->validate([
+            'method' => ['required', 'in:cash,bank_transfer'], 'amount' => ['required', 'numeric', 'gt:0', 'max:99999999999999'],
+        ]);
+
+        $billId = DB::transaction(function () use ($tenant, $outlet, $returnId, $data) {
+            $now = now($tenant->timezone);
+            $return = DB::table('purchase_returns')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $returnId)->lockForUpdate()->first();
+            abort_unless($return && $return->status === 'posted', 404);
+            $outstanding = round((float) $return->refund_due - (float) $return->refunded_total, 2);
+            $amount = round((float) $data['amount'], 2);
+            if ($amount > $outstanding) {
+                throw ValidationException::withMessages(['amount' => $outstanding > 0 ? 'Nominal melebihi refund yang belum diterima.' : 'Retur ini tidak punya refund yang tertunda.']);
+            }
+            $cashAccount = DB::table('cash_accounts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                ->where('type', $data['method'] === 'cash' ? 'cash' : 'bank')->where('is_active', true)->first();
+            if (! $cashAccount || ! $cashAccount->chart_account_id) {
+                throw ValidationException::withMessages(['method' => 'Akun kas atau bank belum disiapkan.']);
+            }
+            $openShift = $data['method'] === 'cash'
+                ? DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                    ->where('cashier_user_id', auth()->id())->where('status', 'open')->first()
+                : null;
+            $refundId = (string) Str::uuid();
+            $entryId = (string) Str::uuid();
+            DB::table('journal_entries')->insert([
+                'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'RFD-'.$return->return_number.'-'.Str::upper(Str::random(4)),
+                'entry_date' => $now->toDateString(), 'status' => 'posted', 'description' => 'Refund retur pembelian '.$return->return_number,
+                'source_type' => 'purchase_return_refund', 'source_id' => $refundId, 'idempotency_key' => 'purchase-refund:'.$refundId.':journal',
+                'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            foreach ([[$cashAccount->chart_account_id, $amount, 0], [$this->refundReceivableAccount($tenant->id, $now)->id, 0, $amount]] as [$accountId, $debit, $credit]) {
+                DB::table('journal_lines')->insert([
+                    'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $entryId, 'account_id' => $accountId,
+                    'supplier_id' => $return->supplier_id, 'description' => 'Refund '.$return->return_number, 'debit' => $debit, 'credit' => $credit,
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+            }
+            DB::table('purchase_return_refunds')->insert([
+                'id' => $refundId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'purchase_return_id' => $return->id,
+                'cash_account_id' => $cashAccount->id, 'cash_shift_id' => $openShift?->id, 'method' => $data['method'], 'amount' => $amount,
+                'received_at' => $now, 'journal_entry_id' => $entryId, 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            DB::table('purchase_returns')->where('id', $return->id)->update(['refunded_total' => round((float) $return->refunded_total + $amount, 2), 'updated_at' => $now]);
+            DB::table('audit_logs')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(),
+                'action' => 'purchase_return.refunded', 'subject_type' => 'supplier_bill', 'subject_id' => $return->supplier_bill_id,
+                'after' => json_encode(['return' => $return->return_number, 'amount' => $amount]), 'occurred_at' => $now, 'created_at' => $now,
+            ]);
+
+            return $return->supplier_bill_id;
+        }, attempts: 3);
+
+        return redirect()->route('purchasing.return.create', $billId)->with('success', 'Refund dari supplier dicatat.');
+    }
+
+    private function refundReceivableAccount(string $tenantId, $now): object
+    {
+        $account = DB::table('chart_of_accounts')->where('tenant_id', $tenantId)->where('code', '1210')->first();
+        if ($account) {
+            return $account;
+        }
+        DB::table('chart_of_accounts')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'code' => '1210', 'name' => 'Piutang Refund Supplier',
+            'account_type' => 'asset', 'normal_balance' => 'debit', 'is_system' => true, 'allow_manual_posting' => false,
+            'is_active' => true, 'created_at' => $now, 'updated_at' => $now,
+        ]);
+
+        return DB::table('chart_of_accounts')->where('tenant_id', $tenantId)->where('code', '1210')->first();
     }
 
     /**

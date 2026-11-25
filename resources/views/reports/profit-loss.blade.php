@@ -28,6 +28,6 @@
         <tr style="background:var(--primary-soft)"><td></td><td><b>Laba bersih</b></td><td class="money text-right"><b>{{ $rp($netProfit) }}</b></td></tr>
         </tbody>
     </table></div>
-    <p class="muted" style="margin-top:12px;font-size:12px">Penyusutan aset belum diposting ke jurnal, jadi belum masuk laporan ini.</p>
+    <p class="muted" style="margin-top:12px;font-size:12px">Penyusutan aset masuk laporan setelah diposting dari menu Aset usaha.</p>
 </div>
 @endsection

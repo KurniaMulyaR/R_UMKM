@@ -90,8 +90,12 @@ class ExpenseController extends Controller
                     'description' => 'Biaya '.$number, 'debit' => $debit, 'credit' => $credit, 'created_at' => $now, 'updated_at' => $now,
                 ]);
             }
+            $openShift = $data['method'] === 'cash'
+                ? DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                    ->where('cashier_user_id', auth()->id())->where('status', 'open')->first()
+                : null;
             DB::table('expenses')->insert([
-                'id' => $expenseId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'cash_account_id' => $cashAccount->id,
+                'id' => $expenseId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'cash_shift_id' => $openShift?->id, 'cash_account_id' => $cashAccount->id,
                 'created_by_user_id' => auth()->id(), 'expense_number' => $number, 'spent_at' => $spentAt, 'payee' => $data['payee'] ?? null,
                 'description' => $data['description'] ?? null, 'total' => $amount, 'status' => 'posted', 'journal_entry_id' => $entryId,
                 'created_at' => $now, 'updated_at' => $now,

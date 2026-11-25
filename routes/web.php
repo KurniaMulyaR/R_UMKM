@@ -72,6 +72,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:owner,manager')->prefix('assets')->name('assets.')->group(function () {
         Route::get('/', [AssetController::class, 'index'])->name('index');
         Route::post('/', [AssetController::class, 'store'])->name('store');
+        Route::post('/depreciation', [AssetController::class, 'postDepreciation'])->name('depreciation.store');
         Route::get('/{id}', [AssetController::class, 'show'])->name('show');
         Route::post('/{id}/maintenance', [AssetController::class, 'storeMaintenance'])->name('maintenance.store');
         Route::post('/{id}/dispose', [AssetController::class, 'dispose'])->name('dispose');
@@ -83,5 +84,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/aging', [PurchasingController::class, 'aging'])->name('aging');
         Route::get('/bills/{billId}/return', [PurchaseReturnController::class, 'create'])->name('return.create');
         Route::post('/bills/{billId}/return', [PurchaseReturnController::class, 'store'])->name('return.store');
+        Route::post('/returns/{returnId}/refund', [PurchaseReturnController::class, 'refund'])->name('return.refund');
     });
 });

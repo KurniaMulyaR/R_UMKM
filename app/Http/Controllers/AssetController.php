@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AssetController extends Controller
@@ -61,6 +62,75 @@ class AssetController extends Controller
         return redirect()->route('assets.index')->with('success', 'Aset berhasil dicatat.');
     }
 
+    /**
+     * Posting penyusutan garis lurus per bulan (Dr Beban Penyusutan, Cr Akumulasi Penyusutan).
+     * Mulai bulan setelah pembelian, berhenti di bulan pelepasan, dan bulan yang terlewat ikut disusulkan.
+     */
+    public function postDepreciation(Request $request): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $data = $request->validate(['period' => ['required', 'regex:/^\d{4}-\d{2}$/']]);
+        $target = Carbon::createFromFormat('Y-m-d', $data['period'].'-01', $tenant->timezone)->startOfMonth();
+        if ($target->gt(Carbon::now($tenant->timezone)->startOfMonth())) {
+            throw ValidationException::withMessages(['period' => 'Penyusutan tidak bisa diposting untuk bulan yang belum berjalan.']);
+        }
+
+        $posted = DB::transaction(function () use ($tenant, $outlet, $target) {
+            $now = now($tenant->timezone);
+            $expense = $this->systemAccount($tenant->id, '6080', 'Beban Penyusutan', 'expense', 'debit', $now);
+            $accumulated = $this->systemAccount($tenant->id, '1590', 'Akumulasi Penyusutan', 'asset', 'credit', $now);
+            $count = 0;
+            $assets = DB::table('business_assets')->where('tenant_id', $tenant->id)->lockForUpdate()->get();
+            foreach ($assets as $asset) {
+                $depreciable = round(max(0.0, (float) $asset->purchase_cost - (float) $asset->salvage_value), 2);
+                if ($depreciable <= 0) {
+                    continue;
+                }
+                $monthly = round($depreciable / max(1, (int) $asset->useful_life_months), 2);
+                $postedTotal = (float) DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->sum('amount');
+                $postedPeriods = DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->pluck('period')->all();
+                $cursor = Carbon::parse($asset->purchase_date)->startOfMonth()->addMonth();
+                $last = $asset->disposed_at ? Carbon::parse($asset->disposed_at)->startOfMonth() : $target->copy();
+                $last = $last->min($target);
+                for (; $cursor->lte($last); $cursor->addMonth()) {
+                    $period = $cursor->format('Y-m');
+                    if (in_array($period, $postedPeriods, true)) {
+                        continue;
+                    }
+                    $amount = round(min($monthly, $depreciable - $postedTotal), 2);
+                    if ($amount <= 0) {
+                        break;
+                    }
+                    $entryId = (string) Str::uuid();
+                    $entryDate = $cursor->copy()->endOfMonth()->min($now)->toDateString();
+                    DB::table('journal_entries')->insert([
+                        'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'DEP-'.$asset->code.'-'.$period,
+                        'entry_date' => $entryDate, 'status' => 'posted', 'description' => 'Penyusutan '.$asset->name.' '.$period,
+                        'source_type' => 'asset_depreciation', 'source_id' => $asset->id, 'idempotency_key' => 'asset-depreciation:'.$asset->id.':'.$period,
+                        'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    foreach ([[$expense->id, $amount, 0], [$accumulated->id, 0, $amount]] as [$accountId, $debit, $credit]) {
+                        DB::table('journal_lines')->insert([
+                            'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'journal_entry_id' => $entryId, 'account_id' => $accountId,
+                            'description' => 'Penyusutan '.$asset->code.' '.$period, 'debit' => $debit, 'credit' => $credit, 'created_at' => $now, 'updated_at' => $now,
+                        ]);
+                    }
+                    DB::table('asset_depreciation_entries')->insert([
+                        'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'business_asset_id' => $asset->id, 'period' => $period,
+                        'amount' => $amount, 'journal_entry_id' => $entryId, 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    $postedTotal += $amount;
+                    $count++;
+                }
+            }
+
+            return $count;
+        }, attempts: 3);
+
+        return back()->with('success', $posted > 0 ? $posted.' jurnal penyusutan diposting.' : 'Tidak ada penyusutan baru untuk diposting.');
+    }
+
     public function show(Request $request, string $id): View
     {
         $tenant = $request->attributes->get('tenant');
@@ -71,6 +141,7 @@ class AssetController extends Controller
 
         return view('assets.show', [
             'asset' => $this->present($asset, Carbon::now($tenant->timezone)->startOfDay()), 'records' => $records,
+            'depreciations' => DB::table('asset_depreciation_entries')->where('business_asset_id', $id)->orderByDesc('period')->get(),
             'categories' => self::CATEGORIES, 'maintenanceCost' => (float) $records->sum('cost'),
         ]);
     }
@@ -137,6 +208,20 @@ class AssetController extends Controller
         }
 
         return $asset;
+    }
+
+    private function systemAccount(string $tenantId, string $code, string $name, string $type, string $normal, $now): object
+    {
+        $account = DB::table('chart_of_accounts')->where('tenant_id', $tenantId)->where('code', $code)->first();
+        if ($account) {
+            return $account;
+        }
+        DB::table('chart_of_accounts')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'code' => $code, 'name' => $name, 'account_type' => $type,
+            'normal_balance' => $normal, 'is_system' => true, 'allow_manual_posting' => false, 'is_active' => true, 'created_at' => $now, 'updated_at' => $now,
+        ]);
+
+        return DB::table('chart_of_accounts')->where('tenant_id', $tenantId)->where('code', $code)->first();
     }
 
     private function nextCode(string $tenantId): string

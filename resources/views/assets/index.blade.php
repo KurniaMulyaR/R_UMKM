@@ -10,6 +10,11 @@
     <div class="card feature-stat"><span class="feature-stat-icon ready-icon">Rp</span><div><small>Nilai buku</small><b>{{ $rp($summary['bookValue']) }}</b></div></div>
     <div class="card feature-stat"><span class="feature-stat-icon partial-icon">!</span><div><small>Perlu perawatan</small><b>{{ $summary['dueSoon'] }}</b></div></div>
 </div>
+<form method="post" action="{{ route('assets.depreciation.store') }}" class="card section-card" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap">@csrf
+    <label style="max-width:200px">Posting penyusutan sampai bulan<input type="month" name="period" value="{{ now()->format('Y-m') }}" max="{{ now()->format('Y-m') }}" required></label>
+    <button class="btn btn-secondary">Posting penyusutan ke jurnal</button>
+    <span class="muted" style="font-size:12px;flex:1;min-width:220px">Bulan yang terlewat ikut disusulkan dan tidak akan diposting dua kali.</span>
+</form>
 <div id="asset-form" class="card form-card product-form">
     <h2>Aset baru</h2>
     <form method="post" action="{{ route('assets.store') }}">@csrf

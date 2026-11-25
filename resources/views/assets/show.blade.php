@@ -14,7 +14,7 @@
         <div class="detail-row"><span>Total biaya perawatan</span><b>{{ $rp($maintenanceCost) }}</b></div>
         @if($asset->next_maintenance_due)<div class="detail-row"><span>Perawatan berikutnya</span><b>{{ \Illuminate\Support\Carbon::parse($asset->next_maintenance_due)->format('d M Y') }}</b></div>@endif
         @if($asset->status === 'disposed')<div class="detail-row"><span>Dilepas</span><b>{{ \Illuminate\Support\Carbon::parse($asset->disposed_at)->format('d M Y') }} · {{ $asset->disposal_reason }}</b></div>@endif
-    </div><p class="muted" style="margin-top:12px;font-size:12px">Nilai buku dihitung garis lurus dan belum diposting ke jurnal.</p></div>
+    </div><p class="muted" style="margin-top:12px;font-size:12px">Nilai buku dihitung garis lurus. Jurnal penyusutan diposting dari halaman daftar aset.</p></div>
     @if($asset->status !== 'disposed')
     <div class="card section-card"><div class="section-title"><h2>Catat perawatan</h2></div>
         <form method="post" action="{{ route('assets.maintenance.store',$asset->id) }}" class="form-stack">@csrf
@@ -32,6 +32,9 @@
     @empty
         <span class="muted">Belum ada riwayat perawatan.</span>
     @endforelse
+</div>
+<div class="card section-card"><div class="section-title"><h2>Jurnal penyusutan</h2></div>
+    @forelse($depreciations as $row)<div class="detail-row"><span>{{ $row->period }}</span><b>{{ $rp($row->amount) }}</b></div>@empty<span class="muted">Belum ada penyusutan yang diposting.</span>@endforelse
 </div>
 @if($asset->status !== 'disposed')
 <details class="card section-card"><summary class="small-link">Lepas aset (dijual, rusak, atau hilang)</summary>
