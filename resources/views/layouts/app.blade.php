@@ -15,6 +15,7 @@
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Opname stok', 'href' => route('stock-counts.index'), 'icon' => 'box', 'active' => request()->routeIs('stock-counts.*')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Aset usaha', 'href' => route('assets.index'), 'icon' => 'wallet', 'active' => request()->routeIs('assets.*')];
         if (($currentRole->key ?? '') === 'owner') {
+            $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Pengaturan usaha', 'href' => route('settings.edit'), 'icon' => 'grid', 'active' => request()->routeIs('settings.*')];
             $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Audit log', 'href' => route('audit-logs.index'), 'icon' => 'check', 'active' => request()->routeIs('audit-logs.*')];
             $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Pembayaran QRIS', 'href' => route('payment-gateway.edit'), 'icon' => 'wallet', 'active' => request()->routeIs('payment-gateway.*')];
         }

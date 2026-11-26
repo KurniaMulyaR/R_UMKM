@@ -19,7 +19,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Shift kasir', 'status' => 'Ada', 'summary' => 'Buka/tutup shift dan hitung selisih kas dasar.'],
                     ['name' => 'Transaksi, void & retur', 'status' => 'Ada', 'summary' => 'Riwayat transaksi, void dengan jurnal pembalik, dan retur penjualan sebagian/penuh (stok, kasbon, refund, shift).'],
                     ['name' => 'Dashboard & laporan', 'status' => 'Sebagian', 'summary' => 'Ringkasan omzet, transaksi, perkiraan laba kotor, stok menipis, dan transaksi terbaru. Laporan periodik belum ada.'],
-                    ['name' => 'Tenant, outlet & hak akses', 'status' => 'Sebagian', 'summary' => 'Akun usaha, outlet awal, dan peran dasar. Pengelolaan banyak outlet serta permission granular belum ada.'],
+                    ['name' => 'Tenant, outlet & hak akses', 'status' => 'Sebagian', 'summary' => 'Pengaturan usaha, banyak outlet dengan akses per staf, kelola staf (ubah peran, nonaktifkan, reset sandi), dan matriks hak akses per peran. Peran masih tetap; izin granular yang bisa diatur sendiri belum ada.'],
                     ['name' => 'Audit & event transaksi', 'status' => 'Sebagian', 'summary' => 'Audit log untuk transaksi inti dengan penampil (filter aksi, pengguna, tanggal) khusus owner. Pemrosesan event outbox terjadwal belum ada.'],
                 ],
             ],

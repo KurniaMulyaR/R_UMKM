@@ -41,6 +41,8 @@
         <div class="doc-title"><h2>@yield('doc_name')</h2><small>No. {{ $number ?? $payment->payment_number }}</small></div>
     </header>
     @yield('body')
+    @php $footerNote = json_decode((string) $tenant->settings, true)['document_footer'] ?? null; @endphp
+    @if($footerNote)<p style="margin-top:18px;font-size:12px;text-align:center">{{ $footerNote }}</p>@endif
 </main>
 </body>
 </html>
