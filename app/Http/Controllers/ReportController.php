@@ -118,10 +118,13 @@ class ReportController extends Controller
             $amount = round((float) $data['amount'], 2);
             $entryId = (string) Str::uuid();
             $label = $isCapital ? 'Setoran modal pemilik' : 'Prive pemilik';
+            $openShift = $data['method'] === 'cash'
+                ? DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('cashier_user_id', auth()->id())->where('status', 'open')->first()
+                : null;
             DB::table('journal_entries')->insert([
                 'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => ($isCapital ? 'CAP-' : 'DRW-').Str::upper(Str::random(8)),
                 'entry_date' => $data['entry_date'], 'status' => 'posted', 'description' => $label.($data['note'] ? ': '.$data['note'] : ''),
-                'source_type' => $isCapital ? 'owner_capital' : 'owner_draw', 'source_id' => $entryId, 'idempotency_key' => 'owner-equity:'.$entryId,
+                'source_type' => $isCapital ? 'owner_capital' : 'owner_draw', 'source_id' => $entryId, 'idempotency_key' => 'owner-equity:'.$entryId, 'cash_shift_id' => $openShift?->id,
                 'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
             ]);
             $lines = $isCapital

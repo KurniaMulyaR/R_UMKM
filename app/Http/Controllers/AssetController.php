@@ -104,10 +104,13 @@ class AssetController extends Controller
         }
         $fixedAssets = $this->systemAccount($tenant->id, '1500', 'Aset Tetap', 'asset', 'debit', $now);
         $entryId = (string) Str::uuid();
+        $openShift = $funding === 'cash'
+            ? DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('cashier_user_id', auth()->id())->where('status', 'open')->first()
+            : null;
         DB::table('journal_entries')->insert([
             'id' => $entryId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'entry_number' => 'ACQ-'.$asset->code,
             'entry_date' => $asset->purchase_date, 'status' => 'posted', 'description' => 'Perolehan aset '.$asset->name,
-            'source_type' => 'asset_acquisition', 'source_id' => $asset->id, 'idempotency_key' => 'asset-acquisition:'.$asset->id,
+            'source_type' => 'asset_acquisition', 'source_id' => $asset->id, 'idempotency_key' => 'asset-acquisition:'.$asset->id, 'cash_shift_id' => $openShift?->id,
             'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
         ]);
         foreach ([[$fixedAssets->id, $cost, 0], [$creditAccount->id, 0, $cost]] as [$accountId, $debit, $credit]) {
