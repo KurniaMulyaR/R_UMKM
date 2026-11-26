@@ -129,7 +129,7 @@ class SalesController extends Controller
                     'product_variant_id' => $movement->product_variant_id, 'occurred_at' => $now, 'movement_type' => 'sale_void',
                     'quantity_delta' => abs((float) $movement->quantity_delta), 'unit_cost' => $movement->unit_cost,
                     'value_delta' => abs((float) $movement->value_delta), 'source_type' => 'sale_void', 'source_id' => $sale->id,
-                    'source_line_id' => $movement->source_line_id, 'idempotency_key' => 'sale-void:'.$sale->id.':'.$movement->product_variant_id,
+                    'source_line_id' => $movement->source_line_id, 'idempotency_key' => 'sale-void:'.$sale->id.':'.$movement->product_variant_id.($movement->movement_type === 'recipe_usage' ? ':recipe' : ''),
                     'created_by_user_id' => auth()->id(), 'reason' => $data['reason'], 'created_at' => $now, 'updated_at' => $now,
                 ]);
                 DB::table('stock_balances')->where('id', $balance->id)->update([

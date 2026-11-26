@@ -223,7 +223,7 @@ class PosController extends Controller
                     }
                 }
 
-                $lineRows = []; $subtotal = 0.0;
+                $lineRows = []; $subtotal = 0.0; $recipeUsage = [];
                 foreach ($data['items'] as $item) {
                     $row = DB::table('product_variants')->join('products', 'products.id', '=', 'product_variants.product_id')
                         ->join('units', 'units.id', '=', 'products.base_unit_id')
@@ -255,6 +255,16 @@ class PosController extends Controller
                         throw ValidationException::withMessages(['items' => 'Stok '.$row->product_name.' tidak cukup. Tersedia '.number_format((float) ($balance->quantity_on_hand ?? 0), 2, ',', '.').'.']);
                     }
                     $unitCost = $row->track_stock && $balance ? (float) $balance->average_cost : (float) ($row->cost_price ?? 0);
+                    $usage = $row->track_stock ? null : RecipeController::consumption($tenant->id, $outlet->id, $row->id, $quantity);
+                    if ($usage) {
+                        $unitCost = $quantity > 0 ? round($usage['cost'] / $quantity, 2) : 0.0;
+                        foreach ($usage['lines'] as $ingredient) {
+                            $recipeUsage[$ingredient['variant_id']] = [
+                                'name' => $ingredient['name'], 'allow_negative' => $ingredient['allow_negative'], 'average_cost' => $ingredient['average_cost'],
+                                'quantity' => round(($recipeUsage[$ingredient['variant_id']]['quantity'] ?? 0) + $ingredient['quantity'], 4),
+                            ];
+                        }
+                    }
                     $unitPrice = $allowPriceOverride && array_key_exists('unit_price', $item)
                         ? round((float) $item['unit_price'], 2)
                         : (float) $price->price;
@@ -263,6 +273,12 @@ class PosController extends Controller
                     $lineNote = $factor != 1.0 ? rtrim(rtrim(number_format($soldQuantity, 4, ',', '.'), '0'), ',').' '.$unitSymbol.' @ Rp '.number_format($unitPrice, 0, ',', '.').' (1 '.$unitSymbol.' = '.rtrim(rtrim(number_format($factor, 4, ',', '.'), '0'), ',').' '.$row->unit_symbol.')' : null;
                     $lineRows[] = ['row' => $row, 'quantity' => $quantity, 'note' => $lineNote, 'price' => $factor != 1.0 ? round($unitPrice / $factor, 2) : $unitPrice,
                         'unit_cost' => $unitCost, 'line_total' => $lineTotal, 'balance' => $balance];
+                }
+                foreach ($recipeUsage as $ingredientId => $need) {
+                    $onHand = (float) DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('product_variant_id', $ingredientId)->value('quantity_on_hand');
+                    if (! $need['allow_negative'] && $onHand + 0.00001 < $need['quantity']) {
+                        throw ValidationException::withMessages(['items' => 'Bahan '.$need['name'].' tidak cukup untuk resep. Tersedia '.number_format($onHand, 2, ',', '.').'.']);
+                    }
                 }
                 $subtotal = round($subtotal, 2);
                 $discount = round((float) ($data['discount'] ?? 0), 2);
@@ -343,6 +359,29 @@ class PosController extends Controller
                             ]);
                         $cogs += $valueDelta;
                     }
+                }
+
+                foreach ($recipeUsage as $ingredientId => $need) {
+                    $balance = DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('product_variant_id', $ingredientId)->lockForUpdate()->first();
+                    $valueDelta = round($need['average_cost'] * $need['quantity'], 2);
+                    DB::table('stock_movements')->insert([
+                        'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'product_variant_id' => $ingredientId, 'occurred_at' => $now,
+                        'movement_type' => 'recipe_usage', 'quantity_delta' => -$need['quantity'], 'unit_cost' => $need['average_cost'], 'value_delta' => -$valueDelta,
+                        'source_type' => 'sale', 'source_id' => $saleId, 'idempotency_key' => 'sale-recipe:'.$saleId.':'.$ingredientId,
+                        'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    if ($balance) {
+                        DB::table('stock_balances')->where('id', $balance->id)->update([
+                            'quantity_on_hand' => (float) $balance->quantity_on_hand - $need['quantity'], 'inventory_value' => round((float) $balance->inventory_value - $valueDelta, 2),
+                            'version' => (int) $balance->version + 1, 'updated_at' => $now,
+                        ]);
+                    } else {
+                        DB::table('stock_balances')->insert([
+                            'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'product_variant_id' => $ingredientId, 'quantity_on_hand' => -$need['quantity'],
+                            'inventory_value' => -$valueDelta, 'average_cost' => $need['average_cost'], 'version' => 1, 'created_at' => $now, 'updated_at' => $now,
+                        ]);
+                    }
+                    $cogs += $valueDelta;
                 }
 
                 $debits = [];

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CustomerController;
@@ -176,6 +177,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');
         Route::post('/', [ExpenseController::class, 'store'])->name('store');
         Route::post('/{id}/void', [ExpenseController::class, 'void'])->name('void');
+    });
+    Route::middleware('role:owner,manager')->prefix('recipes')->name('recipes.')->group(function () {
+        Route::get('/', [RecipeController::class, 'index'])->name('index');
+        Route::get('/{variantId}', [RecipeController::class, 'edit'])->name('edit');
+        Route::put('/{variantId}', [RecipeController::class, 'update'])->name('update');
+        Route::delete('/{variantId}', [RecipeController::class, 'destroy'])->name('destroy');
     });
     Route::middleware('role:owner,manager')->prefix('employees')->name('employees.')->group(function () {
         Route::get('/', [EmployeeController::class, 'index'])->name('index');

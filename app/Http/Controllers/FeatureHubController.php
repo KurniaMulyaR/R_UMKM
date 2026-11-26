@@ -38,7 +38,7 @@ class FeatureHubController extends Controller
                 'group' => 'Modul khusus usaha',
                 'features' => [
                     ['name' => 'Sinkronisasi offline & perangkat', 'status' => 'Belum dibangun', 'summary' => 'Antrean offline, registrasi perangkat, sinkronisasi idempoten, dan penanganan konflik. Tabel dasar sudah disiapkan.'],
-                    ['name' => 'Menu, resep & biaya bahan', 'status' => 'Belum dibangun', 'summary' => 'Resep bahan, pengurangan bahan otomatis, dan costing untuk usaha makanan.'],
+                    ['name' => 'Menu, resep & biaya bahan', 'status' => 'Sebagian', 'summary' => 'Resep per menu, biaya bahan dan margin per porsi, serta pemotongan bahan otomatis saat terjual (ikut kembali saat void). Belum ada produksi batch, modifier/topping, dan retur yang mengembalikan bahan.'],
                     ['name' => 'Nomor seri & garansi', 'status' => 'Belum dibangun', 'summary' => 'Serial unit, riwayat garansi, dan servis untuk toko elektronik.'],
                     ['name' => 'Aset & perawatan', 'status' => 'Sebagian', 'summary' => 'Register aset, umur, nilai buku garis lurus, jadwal dan riwayat perawatan, pelepasan, dan posting jurnal penyusutan bulanan sudah ada. Jurnal perolehan aset tersedia; pembelian aset tunai dan modal/prive tunai kini ikut hitungan kas tutup shift. Pembelian aset lewat PO dan jurnal pelepasan aset belum.'],
                     ['name' => 'Sewa alat', 'status' => 'Belum dibangun', 'summary' => 'Booking, ketersediaan barang, kontrak sewa, deposit, dan pengembalian.'],
