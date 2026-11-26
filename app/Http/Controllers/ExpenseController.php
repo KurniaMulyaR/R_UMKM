@@ -41,7 +41,7 @@ class ExpenseController extends Controller
             ->selectRaw('chart_of_accounts.name as name, SUM(expense_items.amount) as total')->orderByDesc('total')->get();
         $total = (float) $byCategory->sum('total');
         $sales = (float) DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('status', 'completed')
-            ->whereBetween('sold_at', [$start, $end])->sum('grand_total');
+            ->whereBetween('sold_at', [$start, $end])->sum(DB::raw('grand_total - tax_total'));
         $grossProfit = (float) DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->where('sales.tenant_id', $tenant->id)->where('sales.outlet_id', $outlet->id)->where('sales.status', 'completed')
             ->whereBetween('sales.sold_at', [$start, $end])

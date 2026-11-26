@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SaleTax;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -76,7 +77,7 @@ class PosController extends Controller
         $paidCharges = DB::table('payment_gateway_charges')->where('tenant_id', $tenant->id)->where('cashier_user_id', auth()->id())
             ->where('status', 'paid')->whereNull('sale_id')->orderBy('paid_at')->get(['id', 'amount', 'paid_at']);
 
-        return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges', 'relatedSale', 'initialCustomerId', 'initialNotes'));
+        return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges', 'relatedSale', 'initialCustomerId', 'initialNotes') + ['taxSettings' => SaleTax::settings($tenant)]);
     }
 
     /**
@@ -191,6 +192,9 @@ class PosController extends Controller
             'payments' => $receiptPayments,
             'subtotal' => (float) $sale->subtotal,
             'discount' => (float) $sale->discount_total,
+            'tax' => (float) $sale->tax_total,
+            'tax_mode' => $sale->tax_mode,
+            'tax_rate' => (float) $sale->tax_rate,
             'total' => (float) $sale->grand_total,
             'change' => (float) $sale->change_total,
             'credit' => max(0, (float) $sale->grand_total - (float) $sale->paid_total),
@@ -283,7 +287,10 @@ class PosController extends Controller
                 $subtotal = round($subtotal, 2);
                 $discount = round((float) ($data['discount'] ?? 0), 2);
                 if ($discount > $subtotal) throw ValidationException::withMessages(['discount' => 'Diskon tidak boleh melebihi subtotal.']);
-                $total = round($subtotal - $discount, 2);
+                $taxSettings = SaleTax::settings($tenant);
+                $taxResult = SaleTax::compute($taxSettings, round($subtotal - $discount, 2));
+                $taxTotal = $taxResult['tax'];
+                $total = $taxResult['total'];
                 $tenderTotal = round(collect($data['payments'])->sum(fn ($payment) => (float) $payment['amount']), 2);
                 if (abs($tenderTotal - $total) > 0.004) throw ValidationException::withMessages(['payments' => 'Jumlah metode bayar harus sama dengan total transaksi.']);
                 $creditAmount = round(collect($data['payments'])->where('method', 'credit')->sum(fn ($payment) => (float) $payment['amount']), 2);
@@ -308,7 +315,7 @@ class PosController extends Controller
                     'customer_id' => $data['customer_id'] ?? null, 'cashier_user_id' => auth()->id(), 'sale_number' => $saleNumber,
                     'client_transaction_id' => (string) Str::uuid(), 'status' => 'completed', 'channel' => 'pos', 'sold_at' => $now,
                     'currency' => $tenant->currency, 'subtotal' => $subtotal, 'discount_total' => $discount, 'fee_total' => 0,
-                    'tax_total' => 0, 'grand_total' => $total, 'paid_total' => $paidTotal,
+                    'tax_total' => $taxTotal, 'tax_mode' => $taxTotal > 0 ? $taxSettings['mode'] : null, 'tax_rate' => $taxTotal > 0 ? $taxSettings['rate'] : null, 'grand_total' => $total, 'paid_total' => $paidTotal,
                     'change_total' => max(0, $cashReceived - $cashApplied), 'notes' => $data['notes'] ?? null,
                     'completed_at' => $now, 'created_at' => $now, 'updated_at' => $now,
                 ]);
@@ -323,6 +330,14 @@ class PosController extends Controller
 
                 $cogs = 0.0;
                 $allocatedDiscount = 0.0;
+                $netByLine = [];
+                $discountCursor = 0.0;
+                foreach ($lineRows as $netIndex => $netLine) {
+                    $share = $netIndex === count($lineRows) - 1 ? round($discount - $discountCursor, 2) : round($discount * $netLine['line_total'] / max($subtotal, 0.01), 2);
+                    $discountCursor += $share;
+                    $netByLine[$netIndex] = round($netLine['line_total'] - $share, 2);
+                }
+                $taxByLine = $taxTotal > 0 ? SaleTax::allocate($taxTotal, $netByLine) : array_fill(0, count($lineRows), 0.0);
                 $lastLineIndex = count($lineRows) - 1;
                 foreach ($lineRows as $lineIndex => $line) {
                     $row = $line['row']; $qty = $line['quantity']; $cost = $line['unit_cost'];
@@ -337,8 +352,8 @@ class PosController extends Controller
                         'product_id' => $row->product_id, 'product_variant_id' => $row->id, 'unit_id' => $row->unit_id,
                         'sku_snapshot' => $row->product_sku, 'name_snapshot' => $row->product_name, 'variant_snapshot' => $row->name,
                         'quantity' => $qty, 'base_quantity' => $qty, 'unit_price' => $line['price'], 'discount_amount' => $lineDiscount,
-                        'tax_amount' => 0, 'unit_cost_snapshot' => $cost, 'line_subtotal' => $line['line_total'], 'note' => $line['note'] ?? null,
-                        'line_total' => $netLineTotal, 'line_type' => 'product', 'created_at' => $now, 'updated_at' => $now,
+                        'tax_amount' => $taxByLine[$lineIndex], 'unit_cost_snapshot' => $cost, 'line_subtotal' => $line['line_total'], 'note' => $line['note'] ?? null,
+                        'line_total' => $taxSettings['mode'] === 'inclusive' ? round($netLineTotal - $taxByLine[$lineIndex], 2) : $netLineTotal, 'line_type' => 'product', 'created_at' => $now, 'updated_at' => $now,
                     ]);
                     if ($row->track_stock) {
                         $balance = $line['balance'];
@@ -428,7 +443,8 @@ class PosController extends Controller
                 ]);
                 foreach ($debits as $accountId => $amount) $this->journalLine($tenant->id, $entryId, $accountId, $amount, 0, 'Penerimaan '.$saleNumber, $now);
                 $salesAccount = DB::table('chart_of_accounts')->where('tenant_id', $tenant->id)->where('code', '4010')->first();
-                $this->journalLine($tenant->id, $entryId, $salesAccount->id, 0, $total, 'Penjualan '.$saleNumber, $now);
+                $this->journalLine($tenant->id, $entryId, $salesAccount->id, 0, round($total - $taxTotal, 2), 'Penjualan '.$saleNumber, $now);
+                if ($taxTotal > 0) $this->journalLine($tenant->id, $entryId, SaleTax::account($tenant->id)->id, 0, $taxTotal, 'PPN '.$saleNumber, $now);
                 if ($cogs > 0) {
                     $cogsAccount = DB::table('chart_of_accounts')->where('tenant_id', $tenant->id)->where('code', '5010')->first();
                     $inventoryAccount = DB::table('chart_of_accounts')->where('tenant_id', $tenant->id)->where('code', '1100')->first();

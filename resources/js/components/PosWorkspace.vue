@@ -7,6 +7,7 @@ const props = defineProps({
     customers: { type: Array, default: () => [] },
     checkoutUrl: { type: String, required: true },
     csrfToken: { type: String, required: true },
+    taxSettings: { type: Object, default: () => ({ enabled: false, rate: 11, mode: 'exclusive' }) },
     shiftOpen: { type: Boolean, default: false },
     shiftOpenedAt: { type: String, default: '' },
     productsUrl: { type: String, default: '/products' },
@@ -51,7 +52,16 @@ const filteredProducts = computed(() => {
 });
 const subtotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.quantity, 0));
 const discountValue = computed(() => Math.min(Math.max(0, Number(discount.value) || 0), subtotal.value));
-const total = computed(() => Math.max(0, subtotal.value - discountValue.value));
+const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+const netAfterDiscount = computed(() => Math.max(0, subtotal.value - discountValue.value));
+const taxAmount = computed(() => {
+    const tax = props.taxSettings;
+    if (!tax.enabled || netAfterDiscount.value <= 0) return 0;
+    return tax.mode === 'inclusive'
+        ? roundMoney(netAfterDiscount.value * tax.rate / (100 + tax.rate))
+        : roundMoney(netAfterDiscount.value * tax.rate / 100);
+});
+const total = computed(() => props.taxSettings.enabled && props.taxSettings.mode === 'exclusive' ? roundMoney(netAfterDiscount.value + taxAmount.value) : roundMoney(netAfterDiscount.value));
 const itemCount = computed(() => cart.value.reduce((sum, item) => sum + Number(item.quantity), 0));
 const paymentTotal = computed(() => payments.value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
 const cashTotal = computed(() => payments.value.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
@@ -368,7 +378,7 @@ onBeforeUnmount(stopQrisTimer);
                     <input v-if="item.unit_id" type="hidden" :name="`items[${index}][unit_id]`" :value="item.unit_id">
                     <input type="hidden" :name="`items[${index}][quantity]`" :value="item.quantity">
                 </template>
-                <div class="cart-totals"><div class="total-row"><span>Subtotal</span><b>{{ formatRupiah(subtotal) }}</b></div><label>Potongan harga<input v-model.number="discount" name="discount" type="number" min="0" :max="subtotal" step="1" placeholder="0"></label><div v-if="discountValue" class="total-row discount-row"><span>Diskon</span><b>− {{ formatRupiah(discountValue) }}</b></div><div class="total-row grand"><span>Total belanja</span><b>{{ formatRupiah(total) }}</b></div></div>
+                <div class="cart-totals"><div class="total-row"><span>Subtotal</span><b>{{ formatRupiah(subtotal) }}</b></div><label>Potongan harga<input v-model.number="discount" name="discount" type="number" min="0" :max="subtotal" step="1" placeholder="0"></label><div v-if="discountValue" class="total-row discount-row"><span>Diskon</span><b>− {{ formatRupiah(discountValue) }}</b></div><div v-if="taxAmount > 0" class="total-row"><span>{{ taxSettings.mode === 'inclusive' ? 'Termasuk PPN' : 'PPN' }} {{ taxSettings.rate }}%</span><b>{{ formatRupiah(taxAmount) }}</b></div><div class="total-row grand"><span>Total belanja</span><b>{{ formatRupiah(total) }}</b></div></div>
                 <div class="checkout-fields">
                     <label>Pelanggan <span class="optional">wajib untuk kasbon</span><select v-model="customerId" name="customer_id"><option value="">Pelanggan umum</option><option v-for="customer in customers" :key="customer.id" :value="customer.id">{{ customer.name }}{{ customer.phone ? ` · ${customer.phone}` : '' }}</option></select></label>
                     <div class="pay-actions"><label>Metode pembayaran</label><button type="button" class="small-link" :disabled="payments.length >= 4" @click="addPayment">＋ Split bayar</button></div>
@@ -404,6 +414,7 @@ onBeforeUnmount(stopQrisTimer);
                 <hr>
                 <div class="receipt-line"><span>Subtotal</span><span>{{ formatRupiah(receipt.subtotal) }}</span></div>
                 <div v-if="receipt.discount > 0" class="receipt-line"><span>Diskon</span><span>− {{ formatRupiah(receipt.discount) }}</span></div>
+                <div v-if="receipt.tax > 0" class="receipt-line"><span>{{ receipt.tax_mode === 'inclusive' ? 'Termasuk PPN' : 'PPN' }} {{ receipt.tax_rate }}%</span><span>{{ formatRupiah(receipt.tax) }}</span></div>
                 <div class="receipt-line receipt-total"><span>TOTAL</span><span>{{ formatRupiah(receipt.total) }}</span></div>
                 <div v-for="(payment, index) in receipt.payments" :key="`payment-${index}`" class="receipt-line"><span>{{ { cash: 'Tunai', bank_transfer: 'Transfer bank', qris_external: 'QRIS', qris_xendit: 'QRIS', credit: 'Kasbon' }[payment.method] || payment.method }}</span><span>{{ formatRupiah(payment.amount) }}</span></div>
                 <div v-if="receipt.change > 0" class="receipt-line"><span>Kembalian</span><span>{{ formatRupiah(receipt.change) }}</span></div>

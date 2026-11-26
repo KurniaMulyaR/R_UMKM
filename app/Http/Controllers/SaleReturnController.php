@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AccountingPeriod;
+use App\Support\SaleTax;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,13 +54,16 @@ class SaleReturnController extends Controller
                 $isLast = abs($quantity - (float) $item->remaining) < 0.00001;
                 $refund = $isLast ? round((float) $item->line_total - (float) $item->refunded, 2) : round((float) $item->line_total / (float) $item->quantity * $quantity, 2);
                 $restock = ($input['condition'] ?? 'good') === 'good' && $item->track_stock ? $quantity : 0.0;
-                $lines[] = ['item' => $item, 'quantity' => $quantity, 'refund' => max(0.0, $refund), 'restock' => $restock, 'condition' => $input['condition'] ?? 'good'];
+                $tax = $isLast ? round((float) $item->tax_amount - (float) $item->refunded_tax, 2) : round((float) $item->tax_amount / (float) $item->quantity * $quantity, 2);
+                $lines[] = ['item' => $item, 'quantity' => $quantity, 'refund' => max(0.0, $refund), 'tax' => max(0.0, $tax), 'restock' => $restock, 'condition' => $input['condition'] ?? 'good'];
             }
             if ($lines === []) {
                 throw ValidationException::withMessages(['items' => 'Isi jumlah retur minimal satu barang.']);
             }
 
-            $refundTotal = round(collect($lines)->sum('refund'), 2);
+            $netRefund = round(collect($lines)->sum('refund'), 2);
+            $taxRefund = round(collect($lines)->sum('tax'), 2);
+            $refundTotal = round($netRefund + $taxRefund, 2);
             $outstanding = $this->outstanding($sale);
             $receivableReduction = $sale->customer_id ? min($refundTotal, $outstanding) : 0.0;
             $cashRefund = round($refundTotal - $receivableReduction, 2);
@@ -89,7 +93,7 @@ class SaleReturnController extends Controller
             $restockValue = 0.0;
             DB::table('sale_returns')->insert([
                 'id' => $returnId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'sale_id' => $sale->id, 'return_number' => $number, 'status' => 'completed',
-                'reason' => $data['reason'], 'returned_at' => $now, 'created_by_user_id' => auth()->id(), 'approved_by_user_id' => auth()->id(), 'refund_total' => $refundTotal,
+                'reason' => $data['reason'], 'returned_at' => $now, 'created_by_user_id' => auth()->id(), 'approved_by_user_id' => auth()->id(), 'refund_total' => $refundTotal, 'tax_total' => $taxRefund,
                 'restock_policy' => 'good_condition', 'receivable_reduction' => $receivableReduction, 'cash_refund_amount' => $cashRefund, 'refund_method' => $cashRefund > 0 ? $method : null,
                 'cash_shift_id' => $shift?->id, 'created_at' => $now, 'updated_at' => $now,
             ]);
@@ -99,7 +103,7 @@ class SaleReturnController extends Controller
                 $returnItemId = (string) Str::uuid();
                 DB::table('sale_return_items')->insert([
                     'id' => $returnItemId, 'tenant_id' => $tenant->id, 'sale_return_id' => $returnId, 'sale_item_id' => $item->id, 'product_variant_id' => $item->product_variant_id,
-                    'quantity' => $line['quantity'], 'condition' => $line['condition'], 'restock_quantity' => $line['restock'], 'refund_amount' => $line['refund'],
+                    'quantity' => $line['quantity'], 'condition' => $line['condition'], 'restock_quantity' => $line['restock'], 'refund_amount' => $line['refund'], 'tax_amount' => $line['tax'],
                     'reason' => $data['reason'], 'created_at' => $now, 'updated_at' => $now,
                 ]);
                 if ($line['restock'] > 0 && $item->product_variant_id) {
@@ -118,7 +122,10 @@ class SaleReturnController extends Controller
                 'posted_at' => $now, 'posted_by_user_id' => auth()->id(), 'created_by_user_id' => auth()->id(), 'created_at' => $now, 'updated_at' => $now,
             ]);
             $revenue = $this->accountId($tenant->id, '4010');
-            $journal = [[$revenue, $refundTotal, 0]];
+            $journal = [[$revenue, $netRefund, 0]];
+            if ($taxRefund > 0) {
+                $journal[] = [SaleTax::account($tenant->id)->id, $taxRefund, 0];
+            }
             if ($receivableReduction > 0) {
                 $journal[] = [$this->accountId($tenant->id, '1200'), 0, $receivableReduction];
             }
@@ -136,7 +143,7 @@ class SaleReturnController extends Controller
                 ]);
             }
             DB::table('sale_returns')->where('id', $returnId)->update(['journal_entry_id' => $entryId]);
-            DB::table('sales')->where('id', $sale->id)->update(['returned_total' => round((float) $sale->returned_total + $refundTotal, 2), 'updated_at' => $now]);
+            DB::table('sales')->where('id', $sale->id)->update(['returned_total' => round((float) $sale->returned_total + $refundTotal, 2), 'returned_tax_total' => round((float) $sale->returned_tax_total + $taxRefund, 2), 'updated_at' => $now]);
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(), 'action' => 'sale_return.created',
                 'subject_type' => 'sale', 'subject_id' => $sale->id, 'after' => json_encode(['return' => $number, 'refund_total' => $refundTotal]), 'occurred_at' => $now,
@@ -169,12 +176,13 @@ class SaleReturnController extends Controller
     {
         $returned = DB::table('sale_return_items')->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
             ->where('sale_returns.tenant_id', $tenantId)->where('sale_returns.sale_id', $saleId)->where('sale_returns.status', 'completed')
-            ->groupBy('sale_return_items.sale_item_id')->selectRaw('sale_return_items.sale_item_id, sum(sale_return_items.quantity) as qty, sum(sale_return_items.refund_amount) as amount')->get()->keyBy('sale_item_id');
+            ->groupBy('sale_return_items.sale_item_id')->selectRaw('sale_return_items.sale_item_id, sum(sale_return_items.quantity) as qty, sum(sale_return_items.refund_amount) as amount, sum(sale_return_items.tax_amount) as tax')->get()->keyBy('sale_item_id');
 
         return DB::table('sale_items')->leftJoin('products', 'products.id', '=', 'sale_items.product_id')->where('sale_items.tenant_id', $tenantId)->where('sale_items.sale_id', $saleId)
             ->orderBy('sale_items.created_at')->select('sale_items.*', DB::raw('coalesce(products.track_stock, false) as track_stock'))->get()->map(function ($item) use ($returned) {
                 $item->returned = (float) ($returned[$item->id]->qty ?? 0);
                 $item->refunded = (float) ($returned[$item->id]->amount ?? 0);
+                $item->refunded_tax = (float) ($returned[$item->id]->tax ?? 0);
                 $item->remaining = round((float) $item->quantity - $item->returned, 4);
 
                 return $item;

@@ -37,6 +37,7 @@
     <div class="row"><span>Subtotal</span><span>{{ $rp($sale->subtotal) }}</span></div>
     @if((float) $sale->discount_total > 0)<div class="row"><span>Diskon</span><span>-{{ $rp($sale->discount_total) }}</span></div>@endif
     @if((float) $sale->returned_total > 0)<div class="row"><span>Retur</span><span>-{{ $rp($sale->returned_total) }}</span></div>@endif
+    @if((float) $sale->tax_total > 0)<div class="row"><span>{{ $sale->tax_mode === 'inclusive' ? 'Termasuk PPN' : 'PPN' }} {{ rtrim(rtrim(number_format((float) $sale->tax_rate, 2, ',', '.'), '0'), ',') }}%</span><span>{{ $rp($sale->tax_total) }}</span></div>@endif
     <div class="row b"><span>TOTAL</span><span>{{ $rp((float) $sale->grand_total - (float) $sale->returned_total) }}</span></div>
     @foreach($payments as $payment)<div class="row"><span>{{ $methods[$payment->method] ?? $payment->method }}</span><span>{{ $rp($payment->amount) }}</span></div>@endforeach
     @if((float) $sale->change_total > 0)<div class="row"><span>Kembali</span><span>{{ $rp($sale->change_total) }}</span></div>@endif

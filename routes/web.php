@@ -4,6 +4,7 @@ use App\Http\Controllers\AssetController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\VatReportController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CustomerController;
@@ -170,6 +171,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/reports/periods', [AccountingPeriodController::class, 'index'])->middleware('role:owner,manager')->name('reports.periods');
     Route::post('/reports/periods/close', [AccountingPeriodController::class, 'close'])->middleware('role:owner')->name('reports.periods.close');
     Route::post('/reports/periods/reopen', [AccountingPeriodController::class, 'reopen'])->middleware('role:owner')->name('reports.periods.reopen');
+    Route::get('/reports/ppn', [VatReportController::class, 'index'])->middleware('role:owner,manager')->name('reports.ppn');
+    Route::post('/reports/ppn/pay', [VatReportController::class, 'pay'])->middleware('role:owner')->name('reports.ppn.pay');
     Route::get('/reports/cash-flow', [CashFlowController::class, 'index'])->middleware('role:owner,manager')->name('reports.cash-flow');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:owner')->name('audit-logs.index');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');

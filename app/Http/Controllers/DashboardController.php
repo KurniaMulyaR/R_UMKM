@@ -16,7 +16,7 @@ class DashboardController extends Controller
         $day = now($tenant->timezone)->toDateString();
         [$range, $from, $to, $periodLabel] = $this->period($request, $tenant->timezone);
         $summary = [
-            'revenue' => $this->salesInRange($tenant->id, $outlet->id, $from, $to)->sum(DB::raw('grand_total - returned_total')),
+            'revenue' => $this->salesInRange($tenant->id, $outlet->id, $from, $to)->sum(DB::raw('grand_total - tax_total - returned_total + returned_tax_total')),
             'transactions' => $this->salesInRange($tenant->id, $outlet->id, $from, $to)->count(),
             'gross_profit' => $this->grossProfit($tenant->id, $outlet->id, $from, $to),
             'period_label' => $periodLabel,
@@ -24,7 +24,7 @@ class DashboardController extends Controller
         $weekStart = Carbon::now($tenant->timezone)->subDays(6)->startOfDay();
         $dailySales = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->where('status', 'completed')->whereBetween('sold_at', [$weekStart, Carbon::now($tenant->timezone)->endOfDay()])
-            ->selectRaw('DATE(sold_at) as sale_date, SUM(grand_total - returned_total) as revenue, COUNT(*) as transactions')
+            ->selectRaw('DATE(sold_at) as sale_date, SUM(grand_total - tax_total - returned_total + returned_tax_total) as revenue, COUNT(*) as transactions')
             ->groupByRaw('DATE(sold_at)')->get()->keyBy('sale_date');
         $weeklyActivity = collect(range(6, 0))->map(function (int $daysAgo) use ($tenant, $dailySales) {
             $date = Carbon::now($tenant->timezone)->subDays($daysAgo);
@@ -89,7 +89,7 @@ class DashboardController extends Controller
         $trendStart = Carbon::now($tz)->subDays(29)->startOfDay();
         $trendRows = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('status', 'completed')
             ->whereBetween('sold_at', [$trendStart, Carbon::now($tz)->endOfDay()])
-            ->selectRaw('DATE(sold_at) as d, SUM(grand_total - returned_total) as revenue')->groupByRaw('DATE(sold_at)')->pluck('revenue', 'd');
+            ->selectRaw('DATE(sold_at) as d, SUM(grand_total - tax_total - returned_total + returned_tax_total) as revenue')->groupByRaw('DATE(sold_at)')->pluck('revenue', 'd');
         $trend = collect(range(29, 0))->map(function (int $ago) use ($tz, $trendRows) {
             $date = Carbon::now($tz)->subDays($ago);
 
@@ -156,7 +156,7 @@ class DashboardController extends Controller
         $returns = DB::table('sale_returns')->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
             ->where('sales.tenant_id', $tenantId)->where('sales.outlet_id', $outletId)->where('sales.status', 'completed')->where('sale_returns.status', 'completed')
             ->whereDate('sales.sold_at', '>=', $from)->whereDate('sales.sold_at', '<=', $to)
-            ->selectRaw('COALESCE(SUM(sale_returns.refund_total), 0) as refunded, COALESCE(SUM(sale_returns.restock_value), 0) as restocked')->first();
+            ->selectRaw('COALESCE(SUM(sale_returns.refund_total - sale_returns.tax_total), 0) as refunded, COALESCE(SUM(sale_returns.restock_value), 0) as restocked')->first();
 
         return round($items - (float) $returns->refunded + (float) $returns->restocked, 2);
     }

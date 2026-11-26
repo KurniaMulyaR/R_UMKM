@@ -8,6 +8,7 @@
         'customers' => $customers,
         'checkoutUrl' => route('pos.checkout'),
         'csrfToken' => csrf_token(),
+        'taxSettings' => $taxSettings,
         'shiftOpen' => (bool) $shift,
         'shiftOpenedAt' => $shift ? \Illuminate\Support\Carbon::parse($shift->opened_at)->format('H:i') : '',
         'productsUrl' => route('products.index'),

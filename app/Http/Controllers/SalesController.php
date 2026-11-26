@@ -247,7 +247,7 @@ class SalesController extends Controller
             $subtotal = round(collect($checkoutItems)->sum(fn ($item) => (float) $item['quantity'] * (float) $item['unit_price']), 2);
             $discount = round((float) $sale->discount_total, 2);
             if ($discount > $subtotal) throw ValidationException::withMessages(['discount' => 'Diskon tidak boleh melebihi subtotal.']);
-            $total = round($subtotal - $discount, 2);
+            $total = \App\Support\SaleTax::compute(\App\Support\SaleTax::settings($tenant), round($subtotal - $discount, 2))['total'];
             abort_if($total <= 0, 422, 'Total transaksi harus lebih dari nol.');
             $payments = [['method' => $data['method'], 'amount' => $total]];
             $cashApplied = $data['method'] === 'cash' ? $total : 0;

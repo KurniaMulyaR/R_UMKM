@@ -17,6 +17,7 @@
 <table class="totals"><tbody>
     <tr><td>Subtotal</td><td class="num">{{ $rp($sale->subtotal) }}</td></tr>
     @if((float) $sale->discount_total > 0)<tr><td>Diskon</td><td class="num">− {{ $rp($sale->discount_total) }}</td></tr>@endif
+    @if((float) $sale->tax_total > 0)<tr><td>{{ $sale->tax_mode === 'inclusive' ? 'Termasuk PPN' : 'PPN' }} {{ rtrim(rtrim(number_format((float) $sale->tax_rate, 2, ',', '.'), '0'), ',') }}%</td><td class="num">{{ $rp($sale->tax_total) }}</td></tr>@endif
     <tr class="grand"><td>Total</td><td class="num">{{ $rp($sale->grand_total) }}</td></tr>
     @if((float) $sale->returned_total > 0)<tr><td>Retur</td><td class="num">− {{ $rp($sale->returned_total) }}</td></tr>@endif
     <tr><td>Sudah dibayar</td><td class="num">{{ $rp($payments->sum('amount')) }}</td></tr>

@@ -40,6 +40,9 @@
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Jurnal', 'href' => route('journals.index'), 'icon' => 'receipt', 'active' => request()->routeIs('journals.*')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Daftar akun', 'href' => route('accounts.index'), 'icon' => 'grid', 'active' => request()->routeIs('accounts.*')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Arus kas', 'href' => route('reports.cash-flow'), 'icon' => 'wallet', 'active' => request()->routeIs('reports.cash-flow')];
+        if (request()->attributes->get('tenant') && \App\Support\SaleTax::settings(request()->attributes->get('tenant'))['enabled']) {
+            $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laporan PPN', 'href' => route('reports.ppn'), 'icon' => 'receipt', 'active' => request()->routeIs('reports.ppn*')];
+        }
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.profit-loss')];
     }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
