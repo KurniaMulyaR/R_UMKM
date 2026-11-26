@@ -25,10 +25,11 @@ class TenantSettingsController extends Controller
         $tenant = $request->attributes->get('tenant');
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'], 'legal_name' => ['nullable', 'string', 'max:200'], 'phone' => ['nullable', 'string', 'max:32'],
-            'email' => ['nullable', 'email', 'max:190'], 'timezone' => ['required', 'in:'.implode(',', array_keys(self::TIMEZONES))], 'document_footer' => ['nullable', 'string', 'max:300'],
+            'email' => ['nullable', 'email', 'max:190'], 'timezone' => ['required', 'in:'.implode(',', array_keys(self::TIMEZONES))], 'document_footer' => ['nullable', 'string', 'max:300'], 'receipt_width' => ['required', 'in:58,80'],
         ]);
         $settings = json_decode((string) $tenant->settings, true) ?: [];
         $settings['document_footer'] = $data['document_footer'] ?? null;
+        $settings['receipt_width'] = (int) $data['receipt_width'];
         $now = now();
         DB::transaction(function () use ($tenant, $data, $settings, $request, $now) {
             DB::table('tenants')->where('id', $tenant->id)->update([

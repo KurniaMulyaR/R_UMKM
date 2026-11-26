@@ -115,6 +115,10 @@ class PosController extends Controller
 
         $saleId = $this->processCheckout($tenant, $outlet, $data, $cashApplied);
 
+        if ($request->boolean('print_receipt')) {
+            return redirect()->route('documents.thermal', ['id' => $saleId, 'auto' => 1]);
+        }
+
         return redirect()->route('sales.show', $saleId)->with('success', 'Transaksi berhasil disimpan.');
     }
 

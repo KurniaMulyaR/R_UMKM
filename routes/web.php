@@ -97,6 +97,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post('/sales/{id}/return', [SaleReturnController::class, 'store'])->middleware('role:owner,manager')->name('sales.return.store');
     Route::get('/sales/{id}/invoice', [DocumentController::class, 'invoice'])->name('documents.invoice');
     Route::get('/sales/{id}/delivery-note', [DocumentController::class, 'deliveryNote'])->name('documents.delivery-note');
+    Route::get('/sales/{id}/struk', [DocumentController::class, 'thermal'])->name('documents.thermal');
     Route::get('/sales/{id}/receipts/{paymentId}', [DocumentController::class, 'receipt'])->name('documents.receipt');
     Route::post('/sales/{id}/payments', [SalesController::class, 'collectPayment'])->name('sales.payments.store');
     Route::post('/sales/{id}/void', [SalesController::class, 'void'])->name('sales.void');

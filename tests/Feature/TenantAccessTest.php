@@ -71,12 +71,12 @@ class TenantAccessTest extends TestCase
     public function test_settings_update_and_validation(): void
     {
         $this->prepare();
-        $this->actingAs($this->owner)->put(route('settings.update'), ['name' => 'Toko Baru', 'legal_name' => 'PT Toko Baru', 'timezone' => 'Asia/Makassar', 'document_footer' => 'Terima kasih'])->assertSessionHasNoErrors();
+        $this->actingAs($this->owner)->put(route('settings.update'), ['name' => 'Toko Baru', 'legal_name' => 'PT Toko Baru', 'timezone' => 'Asia/Makassar', 'document_footer' => 'Terima kasih', 'receipt_width' => 58])->assertSessionHasNoErrors();
         $tenant = DB::table('tenants')->first();
         $this->assertSame('Toko Baru', $tenant->name);
         $this->assertSame('Asia/Makassar', $tenant->timezone);
         $this->assertSame('Terima kasih', json_decode($tenant->settings, true)['document_footer']);
-        $this->put(route('settings.update'), ['name' => 'Toko Baru', 'timezone' => 'Mars/Olympus'])->assertSessionHasErrors('timezone');
+        $this->put(route('settings.update'), ['name' => 'Toko Baru', 'timezone' => 'Mars/Olympus', 'receipt_width' => 80])->assertSessionHasErrors('timezone');
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'tenant.updated')->count());
     }
 

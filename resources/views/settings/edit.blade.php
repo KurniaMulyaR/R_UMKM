@@ -13,6 +13,7 @@
         <label>Email<input type="email" name="email" maxlength="190" value="{{ old('email', $tenant->email) }}"></label>
         <label>Zona waktu<select name="timezone">@foreach($timezones as $zone => $label)<option value="{{ $zone }}" @selected(old('timezone', $tenant->timezone) === $zone)>{{ $label }}</option>@endforeach</select></label>
         <label>Catatan kaki dokumen <span class="optional">opsional</span><input name="document_footer" maxlength="300" placeholder="Contoh: Barang yang sudah dibeli tidak dapat ditukar." value="{{ old('document_footer', $settings['document_footer'] ?? '') }}"></label>
+        <label>Lebar kertas struk<select name="receipt_width"><option value="80" @selected((int) old('receipt_width', $settings['receipt_width'] ?? 80) === 80)>80 mm</option><option value="58" @selected((int) old('receipt_width', $settings['receipt_width'] ?? 80) === 58)>58 mm</option></select></label>
     </div>
     <div class="form-actions"><button class="btn btn-primary">Simpan</button></div>
 </form>

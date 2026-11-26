@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 
 const props = defineProps({
@@ -125,8 +125,36 @@ function scanBarcode() {
         addProduct(product);
         search.value = '';
         activeCategory.value = 'Semua';
+    } else if (/^\S{4,}$/.test(barcode) && !filteredProducts.value.length) {
+        message.value = `Barcode ${barcode} belum terdaftar.`;
     }
 }
+
+const printReceipt = ref(false);
+try {
+    printReceipt.value = window.localStorage.getItem('rk_print_receipt') === '1';
+} catch (error) {
+    printReceipt.value = false;
+}
+watch(printReceipt, (value) => {
+    try {
+        window.localStorage.setItem('rk_print_receipt', value ? '1' : '0');
+    } catch (error) {
+        // penyimpanan peramban tidak tersedia; pilihan hanya berlaku di sesi ini
+    }
+});
+
+function captureScannerKeys(event) {
+    const tag = (document.activeElement?.tagName || '').toLowerCase();
+    if (['input', 'textarea', 'select', 'button'].includes(tag) || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key.length === 1 && searchInput.value) searchInput.value.focus();
+}
+
+onMounted(() => {
+    window.addEventListener('keydown', captureScannerKeys);
+    searchInput.value?.focus();
+});
+onBeforeUnmount(() => window.removeEventListener('keydown', captureScannerKeys));
 
 function validateCheckout(event) {
     if (!canSubmit.value) {
@@ -287,6 +315,8 @@ onBeforeUnmount(stopQrisTimer);
                     <label>Uang tunai diterima<input v-model.number="cashReceived" name="cash_received" type="number" min="0" step="1" placeholder="0"></label>
                     <div class="total-row change-row"><span>Kembalian</span><b>{{ formatRupiah(change) }}</b></div>
                     <label>Catatan <span class="optional">opsional</span><input v-model="notes" name="notes" maxlength="1000" placeholder="Catatan transaksi"></label>
+                    <label class="check-row"><input type="checkbox" v-model="printReceipt"> Cetak struk setelah transaksi</label>
+                    <input v-if="printReceipt" type="hidden" name="print_receipt" value="1">
                     <button class="btn btn-primary btn-block coop-submit" type="submit" :disabled="!canSubmit">Simpan transaksi <span>→</span></button>
                     <p v-if="hasCredit && !customerId" class="checkout-note">Pilih pelanggan agar transaksi kasbon tercatat.</p>
                 </div>

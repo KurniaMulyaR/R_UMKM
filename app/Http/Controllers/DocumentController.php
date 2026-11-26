@@ -52,6 +52,26 @@ class DocumentController extends Controller
         ]);
     }
 
+    /**
+     * Struk thermal 58/80 mm. Dengan ?auto=1 halaman langsung membuka dialog cetak lalu kembali ke kasir.
+     */
+    public function thermal(Request $request, string $id): View
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $sale = $this->loadSale($tenant->id, $outlet->id, $id);
+        $cashier = DB::table('users')->where('id', $sale->cashier_user_id)->value('name');
+        $settings = json_decode((string) $tenant->settings, true) ?: [];
+        $width = (int) $request->query('w', $settings['receipt_width'] ?? 80);
+        $payments = $this->confirmedPayments($tenant->id, $sale->id);
+
+        return view('documents.thermal', [
+            'tenant' => $tenant, 'outlet' => $outlet, 'sale' => $sale, 'items' => $this->items($tenant->id, $sale->id), 'payments' => $payments, 'cashier' => $cashier,
+            'width' => in_array($width, [58, 80], true) ? $width : 80, 'auto' => $request->boolean('auto'), 'footer' => $settings['document_footer'] ?? null,
+            'creditAmount' => max(0.0, round((float) $sale->grand_total - (float) $sale->returned_total - (float) $payments->sum('amount'), 2)),
+        ]);
+    }
+
     private function loadSale(string $tenantId, string $outletId, string $id): object
     {
         $sale = DB::table('sales')->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
