@@ -43,7 +43,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Aset & perawatan', 'status' => 'Sebagian', 'summary' => 'Register aset, umur, nilai buku garis lurus, jadwal dan riwayat perawatan, pelepasan, dan posting jurnal penyusutan bulanan sudah ada. Jurnal perolehan aset tersedia; pembelian aset tunai dan modal/prive tunai kini ikut hitungan kas tutup shift. Pembelian aset lewat PO dan jurnal pelepasan aset belum.'],
                     ['name' => 'Sewa alat', 'status' => 'Belum dibangun', 'summary' => 'Booking, ketersediaan barang, kontrak sewa, deposit, dan pengembalian.'],
                     ['name' => 'Pembiayaan/cicilan syariah', 'status' => 'Belum dibangun', 'summary' => 'Pengajuan, akad, jadwal angsuran, pembayaran, dan restrukturisasi.'],
-                    ['name' => 'Karyawan & payroll', 'status' => 'Belum dibangun', 'summary' => 'Data karyawan, absensi, komponen gaji, potongan, dan proses payroll.'],
+                    ['name' => 'Karyawan & payroll', 'status' => 'Sebagian', 'summary' => 'Data karyawan, evaluasi gaji, payroll bulanan (bonus/potongan), jurnal gaji, dan slip. Belum ada absensi, lembur, PPh21/BPJS, dan kasbon.'],
                 ],
             ],
             [
