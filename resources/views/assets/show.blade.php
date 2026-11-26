@@ -3,7 +3,7 @@
 @section('crumb','Aset usaha')
 @section('content')
 @php $rp = fn ($n) => 'Rp '.number_format($n, 0, ',', '.'); @endphp
-<div class="page-heading"><div><div class="eyebrow">{{ $asset->code }}</div><h1>{{ $asset->name }}</h1><p>{{ $categories[$asset->category] ?? $asset->category }}{{ $asset->location ? ' · '.$asset->location : '' }}{{ $asset->serial_number ? ' · SN '.$asset->serial_number : '' }}</p></div><span class="status {{ $asset->status === 'disposed' ? 'voided' : '' }}">{{ $asset->status === 'disposed' ? 'Dilepas' : 'Aktif' }}</span></div>
+<div class="page-heading"><div><div class="eyebrow">{{ $asset->code }}</div><h1>{{ $asset->name }}</h1><p>{{ $categories[$asset->category] ?? $asset->category }}{{ $asset->location ? ' · '.$asset->location : '' }}{{ $asset->serial_number ? ' · SN '.$asset->serial_number : '' }}</p></div><span class="status {{ in_array($asset->status, ['disposed','inactive','deleted'], true) ? 'voided' : '' }}">{{ ['active' => 'Aktif', 'inactive' => 'Nonaktif', 'disposed' => 'Dilepas', 'deleted' => 'Dihapus'][$asset->status] ?? $asset->status }}</span></div>
 <div class="detail-grid">
     <div class="card section-card"><div class="section-title"><h2>Nilai &amp; umur</h2></div><div class="detail-list">
         <div class="detail-row"><span>Tanggal beli</span><b>{{ \Illuminate\Support\Carbon::parse($asset->purchase_date)->format('d M Y') }}</b></div>
@@ -15,7 +15,7 @@
         @if($asset->next_maintenance_due)<div class="detail-row"><span>Perawatan berikutnya</span><b>{{ \Illuminate\Support\Carbon::parse($asset->next_maintenance_due)->format('d M Y') }}</b></div>@endif
         @if($asset->status === 'disposed')<div class="detail-row"><span>Dilepas</span><b>{{ \Illuminate\Support\Carbon::parse($asset->disposed_at)->format('d M Y') }} · {{ $asset->disposal_reason }}</b></div>@endif
     </div><p class="muted" style="margin-top:12px;font-size:12px">Nilai buku dihitung garis lurus. Jurnal penyusutan diposting dari halaman daftar aset.</p></div>
-    @if($asset->status !== 'disposed')
+    @if(! in_array($asset->status, ['disposed','deleted'], true))
     <div class="card section-card"><div class="section-title"><h2>Catat perawatan</h2></div>
         <form method="post" action="{{ route('assets.maintenance.store',$asset->id) }}" class="form-stack">@csrf
             <label>Tanggal<input type="date" name="performed_at" required max="{{ now()->toDateString() }}" value="{{ old('performed_at', now()->toDateString()) }}"></label>
@@ -26,14 +26,14 @@
     </div>
     @endif
 </div>
-<div class="card section-card"><div class="section-title"><h2>Riwayat perawatan</h2></div>
+    <div class="card section-card" id="maintenance-history"><div class="section-title"><h2>Histori servis / maintenance</h2></div>
     @forelse($records as $record)
         <div class="detail-row"><span><b>{{ $record->description }}</b><span class="td-sub">{{ \Illuminate\Support\Carbon::parse($record->performed_at)->format('d M Y') }}{{ $record->performed_by ? ' · '.$record->performed_by : '' }}</span></span><b>{{ $rp($record->cost) }}</b></div>
     @empty
         <span class="muted">Belum ada riwayat perawatan.</span>
     @endforelse
 </div>
-@if(! $asset->acquisition_journal_entry_id)
+@if(! $asset->acquisition_journal_entry_id && $asset->status !== 'deleted')
 <div class="card section-card"><div class="section-title"><h2>Jurnal perolehan</h2></div>
     <p class="muted" style="margin-bottom:12px">Aset ini belum masuk jurnal, sehingga belum tampil di neraca.</p>
     <form method="post" action="{{ route('assets.acquisition.store',$asset->id) }}" class="form-grid" style="align-items:end">@csrf
@@ -45,7 +45,7 @@
 <div class="card section-card"><div class="section-title"><h2>Jurnal penyusutan</h2></div>
     @forelse($depreciations as $row)<div class="detail-row"><span>{{ $row->period }}</span><b>{{ $rp($row->amount) }}</b></div>@empty<span class="muted">Belum ada penyusutan yang diposting.</span>@endforelse
 </div>
-@if($asset->status !== 'disposed')
+@if(! in_array($asset->status, ['disposed','deleted'], true))
 <details class="card section-card"><summary class="small-link">Lepas aset (dijual, rusak, atau hilang)</summary>
     <form method="post" action="{{ route('assets.dispose',$asset->id) }}" class="form-stack" style="margin-top:14px">@csrf
         <label>Alasan<input name="reason" required minlength="3" maxlength="500"></label>

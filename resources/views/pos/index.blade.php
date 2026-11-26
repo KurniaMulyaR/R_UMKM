@@ -14,6 +14,9 @@
         'shiftsUrl' => route('shifts.index'),
         'xenditEnabled' => (bool) $xenditEnabled,
         'qrisUrl' => route('pos.qris.store'),
+        'initialCustomerId' => $initialCustomerId,
+        'initialNotes' => $initialNotes,
+        'relatedSaleNumber' => $relatedSale?->sale_number,
     ];
 @endphp
 @foreach($paidCharges as $charge)

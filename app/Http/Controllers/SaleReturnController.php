@@ -96,15 +96,16 @@ class SaleReturnController extends Controller
 
             foreach ($lines as $line) {
                 $item = $line['item'];
+                $returnItemId = (string) Str::uuid();
                 DB::table('sale_return_items')->insert([
-                    'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'sale_return_id' => $returnId, 'sale_item_id' => $item->id, 'product_variant_id' => $item->product_variant_id,
+                    'id' => $returnItemId, 'tenant_id' => $tenant->id, 'sale_return_id' => $returnId, 'sale_item_id' => $item->id, 'product_variant_id' => $item->product_variant_id,
                     'quantity' => $line['quantity'], 'condition' => $line['condition'], 'restock_quantity' => $line['restock'], 'refund_amount' => $line['refund'],
                     'reason' => $data['reason'], 'created_at' => $now, 'updated_at' => $now,
                 ]);
                 if ($line['restock'] > 0 && $item->product_variant_id) {
                     $value = round($line['restock'] * (float) $item->unit_cost_snapshot, 2);
                     $restockValue += $value;
-                    $this->restock($tenant->id, $outlet->id, $item->product_variant_id, $line['restock'], (float) $item->unit_cost_snapshot, $value, $returnId, $number, $now);
+                    $this->restock($tenant->id, $outlet->id, $item->product_variant_id, $line['restock'], (float) $item->unit_cost_snapshot, $value, $returnId, $returnItemId, $number, $now);
                 }
             }
             $restockValue = round($restockValue, 2);
@@ -145,7 +146,7 @@ class SaleReturnController extends Controller
             return $returnId;
         }, attempts: 3);
 
-        return redirect()->route('sales.return.create', $saleId)->with('success', 'Retur dicatat. Stok dan jurnal sudah diperbarui.');
+        return back()->with('success', 'Koreksi pesanan dicatat sebagai retur. Stok dan jurnal sudah diperbarui.');
     }
 
     private function loadSale(string $tenantId, string $outletId, string $saleId): object
@@ -180,13 +181,13 @@ class SaleReturnController extends Controller
             });
     }
 
-    private function restock(string $tenantId, string $outletId, string $variantId, float $quantity, float $unitCost, float $value, string $returnId, string $number, $now): void
+    private function restock(string $tenantId, string $outletId, string $variantId, float $quantity, float $unitCost, float $value, string $returnId, string $returnItemId, string $number, $now): void
     {
         $balance = DB::table('stock_balances')->where('tenant_id', $tenantId)->where('outlet_id', $outletId)->where('product_variant_id', $variantId)->lockForUpdate()->first();
         DB::table('stock_movements')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'product_variant_id' => $variantId, 'occurred_at' => $now, 'movement_type' => 'sale_return',
             'quantity_delta' => $quantity, 'unit_cost' => $unitCost, 'value_delta' => $value, 'source_type' => 'sale_return', 'source_id' => $returnId,
-            'source_line_id' => $returnId.':'.$variantId, 'idempotency_key' => 'sale-return:'.$returnId.':'.$variantId, 'created_by_user_id' => auth()->id(),
+            'source_line_id' => $returnItemId, 'idempotency_key' => 'sale-return:'.$returnId.':'.$variantId, 'created_by_user_id' => auth()->id(),
             'reason' => 'Retur '.$number, 'created_at' => $now, 'updated_at' => $now,
         ]);
         $newQty = round((float) ($balance->quantity_on_hand ?? 0) + $quantity, 4);

@@ -6,7 +6,7 @@ use App\Models\AccountingPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -24,7 +24,48 @@ class SalesController extends Controller
         });
         if ($request->filled('date')) $query->whereDate('sales.sold_at', $request->input('date'));
         $sales = $query->select('sales.*', 'customers.name as customer_name', 'users.name as cashier_name')->orderByDesc('sales.sold_at')->paginate(20)->withQueryString();
-        return view('sales.index', compact('sales'));
+        $paymentMethods = DB::table('payment_allocations')->join('payments', 'payments.id', '=', 'payment_allocations.payment_id')
+            ->where('payment_allocations.tenant_id', $tenant->id)->whereIn('payment_allocations.sale_id', $sales->getCollection()->pluck('id'))
+            ->whereNotIn('payments.status', ['reversed', 'failed'])->orderBy('payments.created_at')
+            ->get(['payment_allocations.sale_id', 'payment_allocations.amount', 'payment_allocations.payment_id', 'payments.method', 'payments.status', 'payments.metadata'])->groupBy('sale_id')
+            ->map(fn ($rows) => $rows->whereNotIn('status', ['reversed', 'failed'])->groupBy('method')
+                ->map(function ($tenders, $method) {
+                    $proofPaymentId = $tenders->first(function ($tender) {
+                        $metadata = is_array($tender->metadata) ? $tender->metadata : (json_decode((string) $tender->metadata, true) ?: []);
+                        return ! empty($metadata['proof_path']);
+                    })?->payment_id;
+
+                    return (object) [
+                        'method' => $method,
+                        'amount' => round((float) $tenders->sum('amount'), 2),
+                        'proof_payment_id' => $proofPaymentId,
+                    ];
+                })->values());
+        $sales->getCollection()->transform(function ($sale) use ($paymentMethods) {
+            $sale->payment_tenders = $paymentMethods->get($sale->id, collect());
+            $sale->payment_methods = $sale->payment_tenders->pluck('method')->values();
+            return $sale;
+        });
+        $saleIds = $sales->getCollection()->pluck('id');
+        $returnedItems = DB::table('sale_return_items')->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->where('sale_returns.tenant_id', $tenant->id)->where('sale_returns.status', 'completed')
+            ->groupBy('sale_return_items.sale_item_id')->select('sale_return_items.sale_item_id')
+            ->selectRaw('SUM(sale_return_items.quantity) as returned_quantity');
+        $saleItems = DB::table('sale_items')->leftJoinSub($returnedItems, 'returned_items', 'returned_items.sale_item_id', '=', 'sale_items.id')
+            ->where('sale_items.tenant_id', $tenant->id)->whereIn('sale_items.sale_id', $saleIds)
+            ->orderBy('sale_items.created_at')->get([
+                'sale_items.id', 'sale_items.sale_id', 'sale_items.product_variant_id', 'sale_items.unit_id', 'sale_items.name_snapshot',
+                'sale_items.quantity', 'sale_items.unit_price', 'sale_items.line_total',
+                DB::raw('COALESCE(returned_items.returned_quantity, 0) as returned_quantity'),
+            ])->map(function ($item) {
+                $item->remaining_quantity = max(0, (float) $item->quantity - (float) $item->returned_quantity);
+                return $item;
+            })->groupBy('sale_id');
+        $isOwner = DB::table('tenant_user_roles')->join('roles', 'roles.id', '=', 'tenant_user_roles.role_id')
+            ->where('tenant_user_roles.tenant_user_id', $request->attributes->get('tenant_membership')->id)
+            ->where('roles.key', 'owner')->exists();
+        $canManageSales = in_array($request->attributes->get('role_key'), ['owner', 'manager'], true);
+        return view('sales.index', compact('sales', 'isOwner', 'canManageSales', 'saleItems'));
     }
 
     public function show(Request $request, string $id): View
@@ -38,7 +79,7 @@ class SalesController extends Controller
         $items = DB::table('sale_items')->where('tenant_id', $tenant->id)->where('sale_id', $sale->id)->get();
         $payments = DB::table('payment_allocations')->join('payments', 'payments.id', '=', 'payment_allocations.payment_id')
             ->where('payment_allocations.tenant_id', $tenant->id)->where('payment_allocations.sale_id', $sale->id)
-            ->select('payments.id', 'payments.method', 'payments.status', 'payment_allocations.amount', 'payments.received_at')->get();
+            ->select('payments.id', 'payments.method', 'payments.status', 'payments.metadata', 'payment_allocations.amount', 'payments.received_at')->get();
         $journal = DB::table('journal_entries')->where('tenant_id', $tenant->id)->where('source_type', 'sale')->where('source_id', $sale->id)->first();
         $isOwner = DB::table('tenant_user_roles')->join('roles', 'roles.id', '=', 'tenant_user_roles.role_id')
             ->where('tenant_user_roles.tenant_user_id', $request->attributes->get('tenant_membership')->id)
@@ -46,17 +87,30 @@ class SalesController extends Controller
         return view('sales.show', compact('sale', 'items', 'payments', 'journal', 'isOwner'));
     }
 
+    public function paymentProof(Request $request, string $id, string $paymentId)
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $payment = DB::table('payments')
+            ->join('payment_allocations', 'payment_allocations.payment_id', '=', 'payments.id')
+            ->join('sales', 'sales.id', '=', 'payment_allocations.sale_id')
+            ->where('payments.tenant_id', $tenant->id)->where('sales.tenant_id', $tenant->id)
+            ->where('sales.outlet_id', $outlet->id)->where('sales.id', $id)->where('payments.id', $paymentId)
+            ->value('payments.metadata');
+        abort_unless($payment, 404);
+
+        $metadata = is_array($payment) ? $payment : json_decode($payment, true);
+        $path = $metadata['proof_path'] ?? null;
+        abort_unless(is_string($path) && str_starts_with($path, 'payment-proofs/'.$tenant->id.'/') && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->download($path, basename($path));
+    }
+
     public function void(Request $request, string $id): RedirectResponse
     {
         $tenant = $request->attributes->get('tenant'); $outlet = $request->attributes->get('outlet');
-        $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
-            'password' => ['required', 'string'], 'confirm_void' => ['accepted'],
-        ]);
-        $membership = $request->attributes->get('tenant_membership');
-        $isOwner = DB::table('tenant_user_roles')->join('roles', 'roles.id', '=', 'tenant_user_roles.role_id')
-            ->where('tenant_user_roles.tenant_user_id', $membership->id)->where('roles.key', 'owner')->exists();
-        abort_unless($isOwner && Hash::check($data['password'], auth()->user()->password), 403, 'Aksi ini hanya untuk pemilik dan perlu konfirmasi kata sandi.');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:1000']]);
+        abort_unless(in_array($request->attributes->get('role_key'), ['owner', 'manager'], true), 403, 'Aksi ini hanya untuk pemilik atau manager usaha.');
 
         DB::transaction(function () use ($tenant, $outlet, $id, $data) {
             $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $id)->lockForUpdate()->first();
@@ -148,7 +202,92 @@ class SalesController extends Controller
 
         }, attempts: 3);
 
-        return redirect()->route('sales.show', $id)->with('success', 'Transaksi dibatalkan dan stok/jurnal sudah dibalik. Jika pembayaran digital sudah settlement, refund tetap perlu diproses di penyedia.');
+        return back()->with('success', 'Transaksi dibatalkan dan stok/jurnal sudah dibalik. Jika pembayaran digital sudah settlement, refund tetap perlu diproses di penyedia.');
+    }
+
+    public function replace(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $outlet = $request->attributes->get('outlet');
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.sale_item_id' => ['required', 'uuid', 'distinct'],
+            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
+            'method' => ['required', 'in:cash,bank_transfer,qris_external,credit'],
+            'cash_received' => ['nullable', 'numeric', 'min:0', 'max:99999999999999'],
+            'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+        ]);
+
+        if ($request->hasFile('payment_proof') && ! in_array($data['method'], ['bank_transfer', 'qris_external'], true)) {
+            throw ValidationException::withMessages(['payment_proof' => 'Lampiran bukti hanya digunakan untuk transfer bank atau QRIS.']);
+        }
+
+        $proofPath = null;
+        try {
+            $replacementId = DB::transaction(function () use ($request, $tenant, $outlet, $id, $data, &$proofPath) {
+            $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->where('id', $id)->lockForUpdate()->first();
+            abort_unless($sale && $sale->status === 'completed', 422, 'Hanya transaksi selesai yang dapat diedit.');
+            abort_if((float) $sale->returned_total > 0, 422, 'Pesanan yang sudah diretur tidak bisa diedit. Tambahkan pesanan baru atau hubungi pemilik.');
+            AccountingPeriod::assertOpen($tenant->id, \Illuminate\Support\Carbon::parse($sale->sold_at, $tenant->timezone));
+            $originalItems = DB::table('sale_items')->where('tenant_id', $tenant->id)->where('sale_id', $sale->id)->get()->keyBy('id');
+            abort_unless($originalItems->count() === count($data['items']), 422, 'Daftar barang transaksi tidak valid. Muat ulang halaman.');
+
+            $checkoutItems = [];
+            foreach ($data['items'] as $item) {
+                $originalItem = $originalItems->get($item['sale_item_id']);
+                abort_unless($originalItem, 422, 'Barang transaksi tidak ditemukan. Muat ulang halaman.');
+                $checkoutItems[] = [
+                    'variant_id' => $originalItem->product_variant_id,
+                    'unit_id' => $originalItem->unit_id,
+                    'quantity' => (float) $item['quantity'],
+                    'unit_price' => (float) $originalItem->unit_price,
+                ];
+            }
+
+            $subtotal = round(collect($checkoutItems)->sum(fn ($item) => (float) $item['quantity'] * (float) $item['unit_price']), 2);
+            $discount = round((float) $sale->discount_total, 2);
+            if ($discount > $subtotal) throw ValidationException::withMessages(['discount' => 'Diskon tidak boleh melebihi subtotal.']);
+            $total = round($subtotal - $discount, 2);
+            abort_if($total <= 0, 422, 'Total transaksi harus lebih dari nol.');
+            $payments = [['method' => $data['method'], 'amount' => $total]];
+            $cashApplied = $data['method'] === 'cash' ? $total : 0;
+            $cashReceived = (float) ($data['cash_received'] ?? 0);
+            if ($cashApplied > 0 && $cashReceived < $cashApplied) {
+                throw ValidationException::withMessages(['cash_received' => 'Uang tunai diterima tidak boleh kurang dari pembayaran tunai.']);
+            }
+
+            $voidRequest = Request::create($request->url(), 'POST', ['reason' => 'Koreksi pesanan dari modal edit.']);
+            $voidRequest->attributes->add($request->attributes->all());
+            $this->void($voidRequest, $sale->id);
+
+            $checkoutData = [
+                'customer_id' => $sale->customer_id,
+                'discount' => $discount,
+                'cash_received' => $cashReceived,
+                'notes' => trim('Pengganti '.$sale->sale_number.' · '.(string) $sale->notes),
+                'items' => $checkoutItems,
+                'payments' => $payments,
+            ];
+            if ($request->hasFile('payment_proof')) {
+                $extension = $request->file('payment_proof')->extension();
+                $proofPath = $request->file('payment_proof')->storeAs(
+                    'payment-proofs/'.$tenant->id,
+                    (string) Str::uuid().'.'.$extension,
+                    'local',
+                );
+                $checkoutData['payment_proof_path'] = $proofPath;
+            }
+
+            return app(PosController::class)->processCheckout($tenant, $outlet, $checkoutData, $cashApplied, null, true);
+            }, attempts: 3);
+        } catch (\Throwable $exception) {
+            if ($proofPath) Storage::disk('local')->delete($proofPath);
+            throw $exception;
+        }
+
+        $newSaleNumber = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $replacementId)->value('sale_number');
+        return back()->with('success', 'Perubahan disimpan sebagai transaksi pengganti '.$newSaleNumber.'. Struk transaksi terbaru siap dicetak.')
+            ->with('receipt_sale_id', $replacementId);
     }
     public function collectPayment(Request $request, string $id): RedirectResponse
     {

@@ -30,33 +30,39 @@ class CustomerController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'], 'phone' => ['nullable', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:190'], 'address' => ['nullable', 'string', 'max:1000'],
-            'credit_limit' => ['nullable', 'numeric', 'min:0', 'max:99999999999999'],
+            'bank_name' => ['nullable', 'string', 'max:140'], 'bank_account_number' => ['nullable', 'string', 'max:64'],
         ]);
         DB::table('customers')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'name' => $data['name'],
             'phone' => $data['phone'] ?? null, 'email' => $data['email'] ?? null, 'address' => $data['address'] ?? null,
-            'credit_limit' => ($data['credit_limit'] ?? '') === '' ? null : $data['credit_limit'],
+            'bank_name' => $data['bank_name'] ?? null, 'bank_account_number' => $data['bank_account_number'] ?? null,
             'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        return back()->with('success', 'Pelanggan berhasil ditambahkan.');
+        return back()->with('success', 'Anggota berhasil ditambahkan.');
     }
 
-    public function updateCreditLimit(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id): RedirectResponse
     {
         $tenant = $request->attributes->get('tenant');
-        $data = $request->validate(['credit_limit' => ['nullable', 'numeric', 'min:0', 'max:99999999999999']]);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'], 'phone' => ['nullable', 'string', 'max:32'],
+            'email' => ['nullable', 'email', 'max:190'], 'address' => ['nullable', 'string', 'max:1000'],
+            'bank_name' => ['nullable', 'string', 'max:140'], 'bank_account_number' => ['nullable', 'string', 'max:64'],
+        ]);
         abort_unless(DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->exists(), 404);
-        $limit = ($data['credit_limit'] ?? '') === '' ? null : round((float) $data['credit_limit'], 2);
-        DB::table('customers')->where('id', $id)->update(['credit_limit' => $limit, 'updated_at' => now()]);
+        DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $id)->update([
+            'name' => $data['name'], 'phone' => $data['phone'] ?? null, 'email' => $data['email'] ?? null,
+            'address' => $data['address'] ?? null, 'bank_name' => $data['bank_name'] ?? null,
+            'bank_account_number' => $data['bank_account_number'] ?? null, 'updated_at' => now(),
+        ]);
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $request->attributes->get('outlet')->id ?? null, 'actor_user_id' => auth()->id(),
-            'action' => 'customer.credit_limit_changed', 'subject_type' => 'customer', 'subject_id' => $id, 'after' => json_encode(['credit_limit' => $limit]),
+            'action' => 'member.updated', 'subject_type' => 'customer', 'subject_id' => $id, 'after' => json_encode(['name' => $data['name'], 'phone' => $data['phone'] ?? null]),
             'occurred_at' => now(),
         ]);
 
-
-        return back()->with('success', 'Batas kredit diperbarui.');
+        return back()->with('success', 'Data anggota berhasil diperbarui.');
     }
 
     public function aging(Request $request): View
@@ -72,7 +78,7 @@ class CustomerController extends Controller
             $key = match (true) {
                 $age <= 30 => 'd30', $age <= 60 => 'd60', $age <= 90 => 'd90', default => 'over',
             };
-            $row = $customers[$sale->customer_id] ?? ['name' => $sale->customer_name, 'limit' => $sale->credit_limit, 'buckets' => array_fill_keys(array_keys(self::BUCKETS), 0.0), 'total' => 0.0, 'sales' => []];
+            $row = $customers[$sale->customer_id] ?? ['name' => $sale->customer_name, 'buckets' => array_fill_keys(array_keys(self::BUCKETS), 0.0), 'total' => 0.0, 'sales' => []];
             $row['buckets'][$key] += (float) $sale->outstanding;
             $row['total'] += (float) $sale->outstanding;
             $row['sales'][] = $sale;
@@ -93,7 +99,7 @@ class CustomerController extends Controller
             ->where('sales.tenant_id', $tenantId)->whereIn('sales.status', ['completed', 'partially_returned'])
             ->whereRaw('(sales.grand_total - sales.returned_total - sales.paid_total) > 0.004')
             ->orderBy('sales.sold_at')
-            ->selectRaw('sales.id, sales.sale_number, sales.sold_at, sales.customer_id, customers.name as customer_name, customers.credit_limit, (sales.grand_total - sales.returned_total - sales.paid_total) as outstanding');
+            ->selectRaw('sales.id, sales.sale_number, sales.sold_at, sales.customer_id, customers.name as customer_name, (sales.grand_total - sales.returned_total - sales.paid_total) as outstanding');
         if ($customerId) {
             $query->where('sales.customer_id', $customerId);
         }

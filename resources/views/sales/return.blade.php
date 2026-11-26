@@ -1,14 +1,14 @@
 @extends('layouts.app')
-@section('title','Retur penjualan')
-@section('crumb')<a href="{{ route('sales.index') }}">Penjualan</a> <span>/</span> <a href="{{ route('sales.show',$sale->id) }}">{{ $sale->sale_number }}</a> <span>/</span> Retur@endsection
+@section('title','Edit pesanan')
+@section('crumb')<a href="{{ route('sales.index') }}">Penjualan</a> <span>/</span> <a href="{{ route('sales.show',$sale->id) }}">{{ $sale->sale_number }}</a> <span>/</span> Koreksi pesanan@endsection
 @section('content')
 @php $rp = fn ($n) => 'Rp '.number_format((float) $n, 0, ',', '.'); $qty = fn ($n) => rtrim(rtrim(number_format((float) $n, 4, ',', '.'), '0'), ','); @endphp
-<div class="page-heading"><div><div class="eyebrow">RETUR PENJUALAN</div><h1>{{ $sale->sale_number }}</h1><p>{{ $sale->customer_name ?: 'Pelanggan umum' }} · total {{ $rp($sale->grand_total) }}@if((float) $sale->returned_total > 0) · sudah diretur {{ $rp($sale->returned_total) }}@endif</p></div>
+<div class="page-heading"><div><div class="eyebrow">EDIT / KOREKSI PESANAN</div><h1>{{ $sale->sale_number }}</h1><p>Transaksi tersimpan sebagai histori tetap. Koreksi item dicatat sebagai retur agar stok dan laporan keuangan tetap sesuai. {{ $sale->customer_name ?: 'Pelanggan umum' }} · total {{ $rp($sale->grand_total) }}@if((float) $sale->returned_total > 0) · sudah diretur {{ $rp($sale->returned_total) }}@endif</p></div>
     <a class="btn btn-secondary" href="{{ route('sales.show',$sale->id) }}">← Kembali</a></div>
 @if(session('success'))<div class="alert success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert error">{{ $errors->first() }}</div>@endif
 <form method="post" action="{{ route('sales.return.store',$sale->id) }}" class="card section-card">@csrf
-    <div class="section-title"><h2>Barang yang diretur</h2></div>
+    <div class="section-title"><h2>Item yang dikoreksi</h2></div>
     <div class="table-wrap"><table>
         <thead><tr><th>BARANG</th><th>DIBELI</th><th>SUDAH DIRETUR</th><th>HARGA NET/UNIT</th><th>RETUR SEKARANG</th><th>KONDISI</th></tr></thead>
         <tbody>@foreach($items as $item)

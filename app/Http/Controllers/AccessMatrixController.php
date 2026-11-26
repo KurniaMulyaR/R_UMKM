@@ -11,7 +11,7 @@ class AccessMatrixController extends Controller
     private const ROLES = ['owner' => 'Pemilik', 'manager' => 'Manajer', 'cashier' => 'Kasir', 'warehouse' => 'Admin gudang'];
 
     private const MODULES = [
-        'pos' => 'Kasir', 'sales' => 'Penjualan & retur', 'shifts' => 'Shift kasir', 'products' => 'Produk, varian & satuan', 'customers' => 'Pelanggan & piutang',
+        'pos' => 'Kasir', 'sales' => 'Penjualan & retur', 'shifts' => 'Shift kasir', 'products' => 'Produk, varian & satuan', 'customers' => 'Anggota & piutang',
         'expenses' => 'Pengeluaran', 'purchasing' => 'Pembelian & supplier', 'purchase-returns' => 'Retur pembelian', 'stock-counts' => 'Opname stok', 'stock-transfers' => 'Transfer stok',
         'outlets' => 'Outlet', 'reconciliations' => 'Rekonsiliasi bank', 'journals' => 'Jurnal', 'ledger' => 'Buku besar', 'accounts' => 'Daftar akun', 'reports' => 'Laporan & tutup periode',
         'assets' => 'Aset usaha', 'staff' => 'Tim usaha', 'audit-logs' => 'Audit log', 'payment-gateway' => 'Pembayaran QRIS', 'documents' => 'Invoice & surat jalan', 'settings' => 'Pengaturan usaha',

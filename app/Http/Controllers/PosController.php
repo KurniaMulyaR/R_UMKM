@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -15,6 +17,16 @@ class PosController extends Controller
     public function index(Request $request): View
     {
         $tenant = $request->attributes->get('tenant'); $outlet = $request->attributes->get('outlet');
+        $relatedSale = null;
+        $initialCustomerId = '';
+        $initialNotes = '';
+        if ($request->filled('add_to_sale')) {
+            $relatedSale = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
+                ->where('id', $request->input('add_to_sale'))->where('status', 'completed')->first();
+            abort_unless($relatedSale, 404);
+            $initialCustomerId = $relatedSale->customer_id ?? '';
+            $initialNotes = 'Pesanan tambahan dari '.$relatedSale->sale_number;
+        }
         $variants = DB::table('product_variants')->join('products', 'products.id', '=', 'product_variants.product_id')
             ->join('units', 'units.id', '=', 'products.base_unit_id')
             ->leftJoin('product_categories', 'product_categories.id', '=', 'products.category_id')
@@ -64,7 +76,7 @@ class PosController extends Controller
         $paidCharges = DB::table('payment_gateway_charges')->where('tenant_id', $tenant->id)->where('cashier_user_id', auth()->id())
             ->where('status', 'paid')->whereNull('sale_id')->orderBy('paid_at')->get(['id', 'amount', 'paid_at']);
 
-        return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges'));
+        return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges', 'relatedSale', 'initialCustomerId', 'initialNotes'));
     }
 
     /**
@@ -90,12 +102,13 @@ class PosController extends Controller
         return array_values($grouped);
     }
 
-    public function checkout(Request $request): RedirectResponse
+    public function checkout(Request $request): RedirectResponse|JsonResponse
     {
         $tenant = $request->attributes->get('tenant'); $outlet = $request->attributes->get('outlet');
         $data = $request->validate([
             'customer_id' => ['nullable', 'uuid'], 'discount' => ['nullable', 'numeric', 'min:0'],
             'cash_received' => ['nullable', 'numeric', 'min:0'], 'notes' => ['nullable', 'string', 'max:1000'],
+            'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             'items' => ['required', 'array', 'min:1', 'max:100'], 'items.*.variant_id' => ['required', 'uuid'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'], 'items.*.unit_id' => ['nullable', 'uuid'],
             'payments' => ['required', 'array', 'min:1', 'max:4'],
@@ -113,7 +126,29 @@ class PosController extends Controller
             throw ValidationException::withMessages(['cash_received' => 'Uang diterima harus sama atau lebih besar dari pembayaran tunai.']);
         }
 
-        $saleId = $this->processCheckout($tenant, $outlet, $data, $cashApplied);
+        if ($request->hasFile('payment_proof')) {
+            $hasManualTransfer = collect($data['payments'])->contains(fn ($payment) => in_array($payment['method'], ['bank_transfer', 'qris_external'], true));
+            if (! $hasManualTransfer) {
+                throw ValidationException::withMessages(['payment_proof' => 'Lampiran bukti hanya digunakan untuk transfer bank atau QRIS manual.']);
+            }
+            $extension = $request->file('payment_proof')->extension();
+            $data['payment_proof_path'] = $request->file('payment_proof')->storeAs(
+                'payment-proofs/'.$tenant->id,
+                (string) Str::uuid().'.'.$extension,
+                'local',
+            );
+        }
+
+        try {
+            $saleId = $this->processCheckout($tenant, $outlet, $data, $cashApplied);
+        } catch (\Throwable $exception) {
+            if (! empty($data['payment_proof_path'])) Storage::disk('local')->delete($data['payment_proof_path']);
+            throw $exception;
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['receipt' => $this->receiptPayload($tenant, $outlet, $saleId)], 201);
+        }
 
         if ($request->boolean('print_receipt')) {
             return redirect()->route('documents.thermal', ['id' => $saleId, 'auto' => 1]);
@@ -122,15 +157,56 @@ class PosController extends Controller
         return redirect()->route('sales.show', $saleId)->with('success', 'Transaksi berhasil disimpan.');
     }
 
+    public function receiptPayload(object $tenant, object $outlet, string $saleId): array
+    {
+        $sale = DB::table('sales')->where('tenant_id', $tenant->id)->where('id', $saleId)->first();
+        abort_unless($sale, 404);
+        $customerName = ! empty($sale->customer_id)
+            ? DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $sale->customer_id)->value('name')
+            : null;
+        $items = DB::table('sale_items')->leftJoin('units', 'units.id', '=', 'sale_items.unit_id')
+            ->where('sale_items.tenant_id', $tenant->id)->where('sale_items.sale_id', $saleId)->orderBy('sale_items.created_at')
+            ->get(['sale_items.name_snapshot', 'sale_items.variant_snapshot', 'sale_items.quantity', 'sale_items.unit_price', 'sale_items.line_subtotal', 'sale_items.line_total', 'units.symbol as unit_symbol'])
+            ->map(fn ($item) => [
+                'name' => $item->name_snapshot, 'variant' => $item->variant_snapshot, 'quantity' => (float) $item->quantity,
+                'unit' => $item->unit_symbol, 'unit_price' => (float) $item->unit_price,
+                'line_subtotal' => (float) $item->line_subtotal, 'line_total' => (float) $item->line_total,
+            ])->all();
+        $receiptPayments = DB::table('payment_allocations')->join('payments', 'payments.id', '=', 'payment_allocations.payment_id')
+            ->where('payment_allocations.tenant_id', $tenant->id)->where('payment_allocations.sale_id', $saleId)
+            ->orderBy('payments.created_at')->get(['payments.method', 'payments.status', 'payment_allocations.amount'])
+            ->map(fn ($payment) => ['method' => $payment->method, 'status' => $payment->status, 'amount' => (float) $payment->amount])->all();
+        $settings = json_decode((string) $tenant->settings, true) ?: [];
+
+        return [
+            'tenant_name' => $tenant->legal_name ?: $tenant->name,
+            'outlet_name' => $outlet->name,
+            'outlet_address' => $outlet->address,
+            'outlet_phone' => $outlet->phone ?: $tenant->phone,
+            'sale_number' => $sale->sale_number,
+            'sold_at' => now($tenant->timezone)->format('d/m/Y H:i'),
+            'cashier' => auth()->user()->name,
+            'customer_name' => $customerName,
+            'items' => $items,
+            'payments' => $receiptPayments,
+            'subtotal' => (float) $sale->subtotal,
+            'discount' => (float) $sale->discount_total,
+            'total' => (float) $sale->grand_total,
+            'change' => (float) $sale->change_total,
+            'credit' => max(0, (float) $sale->grand_total - (float) $sale->paid_total),
+            'footer' => $settings['document_footer'] ?? 'Terima kasih',
+        ];
+    }
+
     /**
      * Run the whole checkout inside one transaction and return the new sale id.
      *
      * @param  array<string, mixed>  $data
      */
-    public function processCheckout(object $tenant, object $outlet, array $data, float $cashApplied, ?string $chargeId = null): string
+    public function processCheckout(object $tenant, object $outlet, array $data, float $cashApplied, ?string $chargeId = null, bool $allowPriceOverride = false): string
     {
         try {
-            $saleId = DB::transaction(function () use ($data, $tenant, $outlet, $cashApplied, $chargeId) {
+            $saleId = DB::transaction(function () use ($data, $tenant, $outlet, $cashApplied, $chargeId, $allowPriceOverride) {
                 $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
                     ->where('cashier_user_id', auth()->id())->where('status', 'open')->lockForUpdate()->first();
                 if (! $shift) throw ValidationException::withMessages(['shift' => 'Buka shift sebelum memulai transaksi.']);
@@ -179,10 +255,13 @@ class PosController extends Controller
                         throw ValidationException::withMessages(['items' => 'Stok '.$row->product_name.' tidak cukup. Tersedia '.number_format((float) ($balance->quantity_on_hand ?? 0), 2, ',', '.').'.']);
                     }
                     $unitCost = $row->track_stock && $balance ? (float) $balance->average_cost : (float) ($row->cost_price ?? 0);
-                    $lineTotal = round($soldQuantity * (float) $price->price, 2);
+                    $unitPrice = $allowPriceOverride && array_key_exists('unit_price', $item)
+                        ? round((float) $item['unit_price'], 2)
+                        : (float) $price->price;
+                    $lineTotal = round($soldQuantity * $unitPrice, 2);
                     $subtotal += $lineTotal;
-                    $lineNote = $factor != 1.0 ? rtrim(rtrim(number_format($soldQuantity, 4, ',', '.'), '0'), ',').' '.$unitSymbol.' @ Rp '.number_format((float) $price->price, 0, ',', '.').' (1 '.$unitSymbol.' = '.rtrim(rtrim(number_format($factor, 4, ',', '.'), '0'), ',').' '.$row->unit_symbol.')' : null;
-                    $lineRows[] = ['row' => $row, 'quantity' => $quantity, 'note' => $lineNote, 'price' => $factor != 1.0 ? round((float) $price->price / $factor, 2) : (float) $price->price,
+                    $lineNote = $factor != 1.0 ? rtrim(rtrim(number_format($soldQuantity, 4, ',', '.'), '0'), ',').' '.$unitSymbol.' @ Rp '.number_format($unitPrice, 0, ',', '.').' (1 '.$unitSymbol.' = '.rtrim(rtrim(number_format($factor, 4, ',', '.'), '0'), ',').' '.$row->unit_symbol.')' : null;
+                    $lineRows[] = ['row' => $row, 'quantity' => $quantity, 'note' => $lineNote, 'price' => $factor != 1.0 ? round($unitPrice / $factor, 2) : $unitPrice,
                         'unit_cost' => $unitCost, 'line_total' => $lineTotal, 'balance' => $balance];
                 }
                 $subtotal = round($subtotal, 2);
@@ -236,8 +315,9 @@ class PosController extends Controller
                         : round($discount * $line['line_total'] / max($subtotal, 0.01), 2);
                     $allocatedDiscount += $lineDiscount;
                     $netLineTotal = round($line['line_total'] - $lineDiscount, 2);
+                    $saleItemId = (string) Str::uuid();
                     DB::table('sale_items')->insert([
-                        'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'sale_id' => $saleId,
+                        'id' => $saleItemId, 'tenant_id' => $tenant->id, 'sale_id' => $saleId,
                         'product_id' => $row->product_id, 'product_variant_id' => $row->id, 'unit_id' => $row->unit_id,
                         'sku_snapshot' => $row->product_sku, 'name_snapshot' => $row->product_name, 'variant_snapshot' => $row->name,
                         'quantity' => $qty, 'base_quantity' => $qty, 'unit_price' => $line['price'], 'discount_amount' => $lineDiscount,
@@ -252,7 +332,7 @@ class PosController extends Controller
                             'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
                             'product_variant_id' => $row->id, 'occurred_at' => $now, 'movement_type' => 'sale',
                             'quantity_delta' => -$qty, 'unit_cost' => $cost, 'value_delta' => -$valueDelta,
-                            'source_type' => 'sale', 'source_id' => $saleId, 'source_line_id' => $saleId.':'.$row->id,
+                            'source_type' => 'sale', 'source_id' => $saleId, 'source_line_id' => $saleItemId,
                             'idempotency_key' => 'sale:'.$saleId.':'.$row->id, 'created_by_user_id' => auth()->id(),
                             'device_id' => null, 'created_at' => $now, 'updated_at' => $now,
                         ]);
@@ -283,6 +363,8 @@ class PosController extends Controller
                         'method' => $method, 'status' => $method === 'credit' ? 'pending' : 'confirmed', 'amount' => $amount,
                         'received_at' => $method === 'credit' ? null : $now, 'confirmed_at' => $method === 'credit' ? null : $now,
                         'idempotency_key' => 'checkout:'.$saleId.':'.$i, 'created_at' => $now, 'updated_at' => $now,
+                        'metadata' => ! empty($data['payment_proof_path']) && in_array($method, ['bank_transfer', 'qris_external'], true)
+                            ? json_encode(['proof_path' => $data['payment_proof_path']]) : null,
                     ]);
                     DB::table('payment_allocations')->insert([
                         'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'payment_id' => $paymentId,

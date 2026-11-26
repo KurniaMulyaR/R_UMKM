@@ -6,7 +6,7 @@
         ['group' => 'OPERASIONAL', 'label' => 'Penjualan', 'href' => route('sales.index'), 'icon' => 'sales', 'active' => request()->routeIs('sales.*')],
         ['group' => 'OPERASIONAL', 'label' => 'Shift kasir', 'href' => route('shifts.index'), 'icon' => 'clock', 'active' => request()->routeIs('shifts.*')],
         ['group' => 'DATA USAHA', 'label' => 'Produk & persediaan', 'href' => route('products.index'), 'icon' => 'box', 'active' => request()->routeIs('products.*')],
-        ['group' => 'DATA USAHA', 'label' => 'Anggota & pelanggan', 'href' => route('customers.index'), 'icon' => 'users', 'active' => request()->routeIs('customers.*')],
+        ['group' => 'DATA USAHA', 'label' => 'Anggota', 'href' => route('customers.index'), 'icon' => 'users', 'active' => request()->routeIs('customers.*')],
     ];
     if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
         $sidebarLinks[] = ['group' => 'OPERASIONAL', 'label' => 'Pengeluaran', 'href' => route('expenses.index'), 'icon' => 'receipt', 'active' => request()->routeIs('expenses.*')];

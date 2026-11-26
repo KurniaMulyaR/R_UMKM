@@ -69,7 +69,7 @@ class StockTransferController extends Controller
                 $total += $value;
                 $itemId = (string) Str::uuid();
                 DB::table('stock_transfer_items')->insert(['id' => $itemId, 'tenant_id' => $tenant->id, 'stock_transfer_id' => $transferId, 'product_variant_id' => $variantId, 'quantity' => $quantity, 'unit_cost' => $cost, 'created_at' => $now, 'updated_at' => $now]);
-                $this->moveStock($tenant->id, $outlet->id, $variantId, -$quantity, $cost, -$value, 'transfer_out', $transferId, 'transfer-out:'.$itemId, $number, $now);
+                $this->moveStock($tenant->id, $outlet->id, $variantId, -$quantity, $cost, -$value, 'transfer_out', $transferId, $itemId, 'transfer-out:'.$itemId, $number, $now);
             }
             $total = round($total, 2);
             DB::table('stock_transfers')->where('id', $transferId)->update(['total_value' => $total]);
@@ -113,7 +113,7 @@ class StockTransferController extends Controller
                 if ($quantity > 0) {
                     $value = round($quantity * $cost, 2);
                     $receivedValue += $value;
-                    $this->moveStock($tenant->id, $outlet->id, $item->product_variant_id, $quantity, $cost, $value, 'transfer_in', $id, 'transfer-in:'.$item->id, $transfer->transfer_number, $now);
+                    $this->moveStock($tenant->id, $outlet->id, $item->product_variant_id, $quantity, $cost, $value, 'transfer_in', $id, $item->id, 'transfer-in:'.$item->id, $transfer->transfer_number, $now);
                 }
                 $shortageValue += round(((float) $item->quantity - $quantity) * $cost, 2);
             }
@@ -139,7 +139,7 @@ class StockTransferController extends Controller
             $now = now($tenant->timezone);
             foreach (DB::table('stock_transfer_items')->where('stock_transfer_id', $id)->get() as $item) {
                 $value = round((float) $item->quantity * (float) $item->unit_cost, 2);
-                $this->moveStock($tenant->id, $outlet->id, $item->product_variant_id, (float) $item->quantity, (float) $item->unit_cost, $value, 'transfer_cancel', $id, 'transfer-cancel:'.$item->id, $transfer->transfer_number, $now);
+                $this->moveStock($tenant->id, $outlet->id, $item->product_variant_id, (float) $item->quantity, (float) $item->unit_cost, $value, 'transfer_cancel', $id, $item->id, 'transfer-cancel:'.$item->id, $transfer->transfer_number, $now);
             }
             $total = round((float) $transfer->total_value, 2);
             $this->journal($tenant->id, $outlet->id, 'JTC-'.$transfer->transfer_number, 'Pembatalan transfer '.$transfer->transfer_number, $id, 'transfer-cancel', [['1100', $total, 0], ['1110', 0, $total]], $now);
@@ -167,12 +167,12 @@ class StockTransferController extends Controller
         return $transfer;
     }
 
-    private function moveStock(string $tenantId, string $outletId, string $variantId, float $quantity, float $unitCost, float $value, string $type, string $transferId, string $key, string $number, $now): void
+    private function moveStock(string $tenantId, string $outletId, string $variantId, float $quantity, float $unitCost, float $value, string $type, string $transferId, string $transferItemId, string $key, string $number, $now): void
     {
         $balance = DB::table('stock_balances')->where('tenant_id', $tenantId)->where('outlet_id', $outletId)->where('product_variant_id', $variantId)->lockForUpdate()->first();
         DB::table('stock_movements')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'product_variant_id' => $variantId, 'occurred_at' => $now, 'movement_type' => $type,
-            'quantity_delta' => $quantity, 'unit_cost' => $unitCost, 'value_delta' => $value, 'source_type' => 'stock_transfer', 'source_id' => $transferId, 'source_line_id' => $key,
+            'quantity_delta' => $quantity, 'unit_cost' => $unitCost, 'value_delta' => $value, 'source_type' => 'stock_transfer', 'source_id' => $transferId, 'source_line_id' => $transferItemId,
             'idempotency_key' => $key, 'created_by_user_id' => auth()->id(), 'reason' => 'Transfer '.$number, 'created_at' => $now, 'updated_at' => $now,
         ]);
         $newQty = round((float) ($balance->quantity_on_hand ?? 0) + $quantity, 4);

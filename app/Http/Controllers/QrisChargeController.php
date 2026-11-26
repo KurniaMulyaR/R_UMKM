@@ -89,7 +89,7 @@ class QrisChargeController extends Controller
         return response()->json(['status' => $charge->status]);
     }
 
-    public function complete(Request $request, string $id): RedirectResponse
+    public function complete(Request $request, string $id): RedirectResponse|JsonResponse
     {
         $tenant = $request->attributes->get('tenant');
         $outlet = $request->attributes->get('outlet');
@@ -99,6 +99,10 @@ class QrisChargeController extends Controller
         $cashApplied = collect($data['payments'])->where('method', 'cash')->sum(fn ($payment) => (float) $payment['amount']);
 
         $saleId = app(PosController::class)->processCheckout($tenant, $outlet, $data, $cashApplied, $charge->id);
+
+        if ($request->expectsJson()) {
+            return response()->json(['receipt' => app(PosController::class)->receiptPayload($tenant, $outlet, $saleId)], 201);
+        }
 
         return redirect()->route('sales.show', $saleId)->with('success', 'Pembayaran QRIS diterima dan transaksi disimpan.');
     }

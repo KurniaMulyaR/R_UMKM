@@ -13,20 +13,27 @@ const props = defineProps({
     shiftsUrl: { type: String, default: '/shifts' },
     xenditEnabled: { type: Boolean, default: false },
     qrisUrl: { type: String, default: '' },
+    initialCustomerId: { type: String, default: '' },
+    initialNotes: { type: String, default: '' },
+    relatedSaleNumber: { type: String, default: '' },
 });
 
 const { catalog, customers, checkoutUrl, csrfToken, shiftOpen, shiftOpenedAt, productsUrl, shiftsUrl } = props;
+const relatedSaleNumber = props.relatedSaleNumber;
 
 const search = ref('');
 const activeCategory = ref('Semua');
 const cart = ref([]);
 const discount = ref(0);
-const customerId = ref('');
+const customerId = ref(props.initialCustomerId);
 const cashReceived = ref(0);
-const notes = ref('');
+const notes = ref(props.initialNotes);
 const payments = ref([{ method: 'cash', amount: 0 }]);
 const message = ref('');
 const searchInput = ref(null);
+const checkoutForm = ref(null);
+const isSubmitting = ref(false);
+const receipt = ref(null);
 const qris = ref(null);
 const qrisBusy = ref(false);
 const qrisCanvas = ref(null);
@@ -49,6 +56,7 @@ const itemCount = computed(() => cart.value.reduce((sum, item) => sum + Number(i
 const paymentTotal = computed(() => payments.value.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
 const cashTotal = computed(() => payments.value.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
 const change = computed(() => Math.max(0, Number(cashReceived.value || 0) - cashTotal.value));
+const hasTransferPayment = computed(() => payments.value.some((payment) => ['bank_transfer', 'qris_external'].includes(payment.method)));
 watch(total, (value) => { if (payments.value.length === 1) payments.value[0].amount = value; });
 const hasCredit = computed(() => payments.value.some((payment) => payment.method === 'credit'));
 const canSubmit = computed(() => props.shiftOpen && cart.value.length > 0 && total.value > 0
@@ -156,7 +164,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => window.removeEventListener('keydown', captureScannerKeys));
 
-function validateCheckout(event) {
+async function validateCheckout(event) {
     if (!canSubmit.value) {
         event.preventDefault();
         if (!props.shiftOpen) message.value = 'Buka shift kasir sebelum menyimpan transaksi.';
@@ -169,7 +177,51 @@ function validateCheckout(event) {
     if (hasXendit.value) {
         event.preventDefault();
         startQris();
+        return;
     }
+
+    event.preventDefault();
+    await submitCheckout(event.currentTarget);
+}
+
+async function submitCheckout(form) {
+    if (isSubmitting.value) return;
+    isSubmitting.value = true;
+    message.value = '';
+    try {
+        const response = await fetch(checkoutUrl, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            body: new FormData(form),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            message.value = data.message || Object.values(data.errors || {}).flat()[0] || 'Transaksi belum bisa disimpan. Coba lagi.';
+            return;
+        }
+
+        receipt.value = data.receipt;
+        cart.value = [];
+        discount.value = 0;
+        customerId.value = '';
+        cashReceived.value = 0;
+        notes.value = '';
+        payments.value = [{ method: 'cash', amount: 0 }];
+        const proofInput = form.querySelector('[name="payment_proof"]');
+        if (proofInput) proofInput.value = '';
+        await nextTick();
+        if (printReceipt.value) window.print();
+    } catch (error) {
+        message.value = 'Koneksi bermasalah saat menyimpan transaksi.';
+    } finally {
+        isSubmitting.value = false;
+    }
+}
+
+function closeReceipt() {
+    receipt.value = null;
+    nextTick(() => searchInput.value?.focus());
 }
 
 function qrisHeaders() {
@@ -228,17 +280,32 @@ function stopQrisTimer() {
     qrisTimer = null;
 }
 
-function submitQrisComplete() {
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = qris.value.complete_url;
-    const token = document.createElement('input');
-    token.type = 'hidden';
-    token.name = '_token';
-    token.value = csrfToken;
-    form.appendChild(token);
-    document.body.appendChild(form);
-    form.submit();
+async function submitQrisComplete() {
+    const currentCharge = qris.value;
+    if (!currentCharge || currentCharge.completing) return;
+    currentCharge.completing = true;
+    try {
+        const response = await fetch(currentCharge.complete_url, {
+            method: 'POST', headers: qrisHeaders(), credentials: 'same-origin', body: JSON.stringify({}),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            message.value = data.message || 'Pembayaran diterima, tetapi transaksi belum selesai tersimpan.';
+            return;
+        }
+        qris.value = null;
+        receipt.value = data.receipt;
+        cart.value = [];
+        discount.value = 0;
+        customerId.value = '';
+        cashReceived.value = 0;
+        notes.value = '';
+        payments.value = [{ method: 'cash', amount: 0 }];
+        await nextTick();
+        if (printReceipt.value) window.print();
+    } catch (error) {
+        message.value = 'Pembayaran diterima, tetapi koneksi terputus saat menyelesaikan transaksi.';
+    }
 }
 
 async function closeQris() {
@@ -255,7 +322,7 @@ onBeforeUnmount(stopQrisTimer);
 
 <template>
     <div class="page-heading pos-page-heading">
-        <div><div class="eyebrow">RUANG TRANSAKSI</div><h1>Kasir</h1><p>Catat penjualan anggota dan pelanggan dengan mudah.</p></div>
+        <div><div class="eyebrow">RUANG TRANSAKSI</div><h1>Kasir</h1><p>{{ relatedSaleNumber ? `Tambah pesanan untuk transaksi ${relatedSaleNumber}. Penjualan tambahan dicatat sebagai transaksi baru.` : 'Catat penjualan anggota dan pelanggan dengan mudah.' }}</p></div>
         <span v-if="shiftOpen" class="shift-open-chip"><i></i> Shift aktif <span v-if="shiftOpenedAt">· {{ shiftOpenedAt }}</span></span>
         <a v-else :href="shiftsUrl" class="btn btn-soft">Buka shift <span>→</span></a>
     </div>
@@ -294,7 +361,7 @@ onBeforeUnmount(stopQrisTimer);
                 <div v-if="!cart.length" class="cart-empty"><span class="basket-illustration">♧</span><b>Keranjang masih kosong</b><span>Pilih barang untuk mulai mencatat transaksi.</span></div>
             </div>
 
-            <form method="post" :action="checkoutUrl" class="pos-checkout coop-checkout" @submit="validateCheckout">
+            <form ref="checkoutForm" method="post" enctype="multipart/form-data" :action="checkoutUrl" class="pos-checkout coop-checkout" @submit="validateCheckout">
                 <input type="hidden" name="_token" :value="csrfToken">
                 <template v-for="(item, index) in cart" :key="item.variant_id">
                     <input type="hidden" :name="`items[${index}][variant_id]`" :value="item.variant_id">
@@ -308,20 +375,43 @@ onBeforeUnmount(stopQrisTimer);
                     <div class="payment-stack">
                         <div v-for="(payment, index) in payments" :key="index" class="payment-row">
                             <select v-model="payment.method" :name="`payments[${index}][method]`" :aria-label="`Metode pembayaran ${index + 1}`" @change="changePaymentMethod(payment)"><option value="cash">Tunai</option><option value="bank_transfer">Transfer bank</option><option value="qris_external">QRIS (manual)</option><option v-if="xenditEnabled" value="qris_xendit">QRIS Xendit (otomatis)</option><option value="credit">Kasbon</option></select>
-                            <input v-model.number="payment.amount" :name="`payments[${index}][amount]`" type="number" min="0.01" step="1" :aria-label="`Nominal pembayaran ${index + 1}`" required>
+                            <input v-model.number="payment.amount" :name="`payments[${index}][amount]`" type="number" min="0.01" step="0.01" :aria-label="`Nominal pembayaran ${index + 1}`" required>
                             <button v-if="payments.length > 1" type="button" :aria-label="`Hapus metode bayar ${index + 1}`" @click="removePayment(index)">×</button>
                         </div>
                     </div>
-                    <label>Uang tunai diterima<input v-model.number="cashReceived" name="cash_received" type="number" min="0" step="1" placeholder="0"></label>
-                    <div class="total-row change-row"><span>Kembalian</span><b>{{ formatRupiah(change) }}</b></div>
+                    <label v-if="cashTotal > 0">Uang tunai diterima<input v-model.number="cashReceived" name="cash_received" type="number" min="0" step="0.01" placeholder="0"></label>
+                    <div v-if="cashTotal > 0" class="total-row change-row"><span>Kembalian</span><b>{{ formatRupiah(change) }}</b></div>
+                    <label v-if="hasTransferPayment">Bukti transfer / QRIS <span class="optional">opsional · JPG, PNG, atau PDF, maks. 5 MB</span><input type="file" name="payment_proof" accept="image/jpeg,image/png,application/pdf"></label>
                     <label>Catatan <span class="optional">opsional</span><input v-model="notes" name="notes" maxlength="1000" placeholder="Catatan transaksi"></label>
-                    <label class="check-row"><input type="checkbox" v-model="printReceipt"> Cetak struk setelah transaksi</label>
+                    <label class="check-row"><input type="checkbox" v-model="printReceipt"> Cetak struk otomatis setelah transaksi</label>
                     <input v-if="printReceipt" type="hidden" name="print_receipt" value="1">
-                    <button class="btn btn-primary btn-block coop-submit" type="submit" :disabled="!canSubmit">Simpan transaksi <span>→</span></button>
+                    <button class="btn btn-primary btn-block coop-submit" type="submit" :disabled="!canSubmit || isSubmitting">{{ isSubmitting ? 'Menyimpan transaksi…' : 'Simpan transaksi' }} <span v-if="!isSubmitting">→</span></button>
                     <p v-if="hasCredit && !customerId" class="checkout-note">Pilih pelanggan agar transaksi kasbon tercatat.</p>
                 </div>
             </form>
         </aside>
+    </div>
+
+    <div v-if="receipt" class="receipt-modal" role="dialog" aria-modal="true" aria-label="Struk penjualan">
+        <section class="receipt-modal-panel">
+            <header class="receipt-modal-heading"><div><span class="eyebrow">TRANSAKSI BERHASIL</span><h2>Struk penjualan</h2><p>{{ receipt.sale_number }}</p></div><button class="receipt-close" type="button" aria-label="Tutup struk" @click="closeReceipt">×</button></header>
+            <div class="receipt-paper">
+                <div class="receipt-center"><b>{{ receipt.tenant_name }}</b><span>{{ receipt.outlet_name }}</span><span v-if="receipt.outlet_address">{{ receipt.outlet_address }}</span><span v-if="receipt.outlet_phone">Telp {{ receipt.outlet_phone }}</span></div>
+                <hr>
+                <div>No: {{ receipt.sale_number }}</div><div>Tgl: {{ receipt.sold_at }}</div><div>Kasir: {{ receipt.cashier }}</div><div v-if="receipt.customer_name">Pelanggan: {{ receipt.customer_name }}</div>
+                <hr>
+                <div v-for="(item, index) in receipt.items" :key="index" class="receipt-item"><b>{{ item.name }}<template v-if="item.variant && item.variant !== 'Default'"> — {{ item.variant }}</template></b><div class="receipt-line"><span>{{ item.quantity }} {{ item.unit || '' }} × {{ formatRupiah(item.unit_price) }}</span><span>{{ formatRupiah(item.line_subtotal) }}</span></div></div>
+                <hr>
+                <div class="receipt-line"><span>Subtotal</span><span>{{ formatRupiah(receipt.subtotal) }}</span></div>
+                <div v-if="receipt.discount > 0" class="receipt-line"><span>Diskon</span><span>− {{ formatRupiah(receipt.discount) }}</span></div>
+                <div class="receipt-line receipt-total"><span>TOTAL</span><span>{{ formatRupiah(receipt.total) }}</span></div>
+                <div v-for="(payment, index) in receipt.payments" :key="`payment-${index}`" class="receipt-line"><span>{{ { cash: 'Tunai', bank_transfer: 'Transfer bank', qris_external: 'QRIS', qris_xendit: 'QRIS', credit: 'Kasbon' }[payment.method] || payment.method }}</span><span>{{ formatRupiah(payment.amount) }}</span></div>
+                <div v-if="receipt.change > 0" class="receipt-line"><span>Kembalian</span><span>{{ formatRupiah(receipt.change) }}</span></div>
+                <div v-if="receipt.credit > 0" class="receipt-line receipt-total"><span>Kasbon</span><span>{{ formatRupiah(receipt.credit) }}</span></div>
+                <hr><div class="receipt-center">{{ receipt.footer || 'Terima kasih' }}</div>
+            </div>
+            <footer class="receipt-modal-actions"><button class="btn btn-secondary" type="button" @click="window.print()">Cetak struk</button><button class="btn btn-primary" type="button" @click="closeReceipt">Transaksi baru</button></footer>
+        </section>
     </div>
 
     <div v-if="qris" class="qris-modal" role="dialog" aria-modal="true" aria-label="Pembayaran QRIS">

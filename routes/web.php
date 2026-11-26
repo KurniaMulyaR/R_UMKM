@@ -91,13 +91,14 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::put('/settings', [TenantSettingsController::class, 'update'])->middleware('role:owner')->name('settings.update');
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::put('/customers/{id}', [CustomerController::class, 'update'])->middleware('role:owner,manager')->name('customers.update');
     Route::get('/customers/aging', [CustomerController::class, 'aging'])->middleware('role:owner,manager')->name('customers.aging');
-    Route::put('/customers/{id}/credit-limit', [CustomerController::class, 'updateCreditLimit'])->middleware('role:owner,manager')->name('customers.credit-limit');
     Route::get('/shifts', [ShiftController::class, 'index'])->name('shifts.index');
     Route::post('/shifts/open', [ShiftController::class, 'open'])->name('shifts.open');
     Route::post('/shifts/close', [ShiftController::class, 'close'])->name('shifts.close');
     Route::get('/sales', [SalesController::class, 'index'])->name('sales.index');
     Route::get('/sales/{id}', [SalesController::class, 'show'])->name('sales.show');
+    Route::get('/sales/{id}/payments/{paymentId}/proof', [SalesController::class, 'paymentProof'])->name('sales.payment-proof');
     Route::get('/sales/{id}/return', [SaleReturnController::class, 'create'])->middleware('role:owner,manager')->name('sales.return.create');
     Route::post('/sales/{id}/return', [SaleReturnController::class, 'store'])->middleware('role:owner,manager')->name('sales.return.store');
     Route::get('/sales/{id}/invoice', [DocumentController::class, 'invoice'])->name('documents.invoice');
@@ -105,7 +106,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/sales/{id}/struk', [DocumentController::class, 'thermal'])->name('documents.thermal');
     Route::get('/sales/{id}/receipts/{paymentId}', [DocumentController::class, 'receipt'])->name('documents.receipt');
     Route::post('/sales/{id}/payments', [SalesController::class, 'collectPayment'])->name('sales.payments.store');
-    Route::post('/sales/{id}/void', [SalesController::class, 'void'])->name('sales.void');
+    Route::put('/sales/{id}', [SalesController::class, 'replace'])->middleware('role:owner,manager')->name('sales.replace');
+    Route::post('/sales/{id}/void', [SalesController::class, 'void'])->middleware('role:owner')->name('sales.void');
 
     Route::middleware('role:owner,manager,warehouse')->prefix('purchasing')->name('purchasing.')->group(function () {
         Route::get('/suppliers', [PurchasingController::class, 'suppliers'])->name('suppliers');
@@ -179,6 +181,10 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/depreciation', [AssetController::class, 'postDepreciation'])->name('depreciation.store');
         Route::post('/{id}/acquisition', [AssetController::class, 'acquisition'])->name('acquisition.store');
         Route::get('/{id}', [AssetController::class, 'show'])->name('show');
+        Route::put('/{id}', [AssetController::class, 'update'])->name('update');
+        Route::patch('/{id}/status', [AssetController::class, 'toggleStatus'])->name('status');
+        Route::delete('/{id}', [AssetController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/restore', [AssetController::class, 'restore'])->name('restore');
         Route::post('/{id}/maintenance', [AssetController::class, 'storeMaintenance'])->name('maintenance.store');
         Route::post('/{id}/dispose', [AssetController::class, 'dispose'])->name('dispose');
     });

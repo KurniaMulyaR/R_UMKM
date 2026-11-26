@@ -68,6 +68,7 @@ class DocumentController extends Controller
         return view('documents.thermal', [
             'tenant' => $tenant, 'outlet' => $outlet, 'sale' => $sale, 'items' => $this->items($tenant->id, $sale->id), 'payments' => $payments, 'cashier' => $cashier,
             'width' => in_array($width, [58, 80], true) ? $width : 80, 'auto' => $request->boolean('auto'), 'footer' => $settings['document_footer'] ?? null,
+            'embed' => $request->boolean('embed'),
             'creditAmount' => max(0.0, round((float) $sale->grand_total - (float) $sale->returned_total - (float) $payments->sum('amount'), 2)),
         ]);
     }

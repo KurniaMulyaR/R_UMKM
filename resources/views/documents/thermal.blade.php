@@ -8,7 +8,7 @@
     .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
     hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
     .row { display: flex; justify-content: space-between; gap: 6px; } .row span:first-child { flex: 1; }
-    .tools { padding: 10px; text-align: center; font-family: sans-serif; }
+    .tools { padding: 10px; text-align: center; font-family: sans-serif; @if($embed) display: none; @endif }
     @media print { .tools { display: none; } }
 </style></head>
 <body>

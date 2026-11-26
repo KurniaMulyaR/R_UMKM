@@ -22,10 +22,18 @@ class AssetController extends Controller
     {
         $tenant = $request->attributes->get('tenant');
         $today = Carbon::now($tenant->timezone)->startOfDay();
-        $assets = DB::table('business_assets')->where('tenant_id', $tenant->id)
+        $showDeleted = $request->boolean('show_deleted');
+        $assetQuery = DB::table('business_assets')->where('tenant_id', $tenant->id);
+        $showDeleted ? $assetQuery->where('status', 'deleted') : $assetQuery->where('status', '!=', 'deleted');
+        $assets = $assetQuery
             ->orderByRaw("CASE status WHEN 'disposed' THEN 1 ELSE 0 END")->orderBy('name')->get()
-            ->map(fn ($asset) => $this->present($asset, $today));
-        $active = $assets->where('status', '!=', 'disposed');
+            ->map(function ($asset) use ($today) {
+                $asset->maintenance_count = DB::table('asset_maintenance_records')->where('business_asset_id', $asset->id)->count();
+                $asset->has_financial_history = (bool) $asset->acquisition_journal_entry_id
+                    || DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->exists();
+                return $this->present($asset, $today);
+            });
+        $active = $assets->where('status', 'active');
         $summary = [
             'count' => $active->count(),
             'cost' => (float) $active->sum('purchase_cost'),
@@ -33,7 +41,8 @@ class AssetController extends Controller
             'dueSoon' => $active->filter(fn ($asset) => $asset->maintenance_state !== 'ok')->count(),
         ];
 
-        return view('assets.index', ['assets' => $assets, 'summary' => $summary, 'categories' => self::CATEGORIES]);
+        $deletedCount = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('status', 'deleted')->count();
+        return view('assets.index', ['assets' => $assets, 'summary' => $summary, 'categories' => self::CATEGORIES, 'showDeleted' => $showDeleted, 'deletedCount' => $deletedCount]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -79,13 +88,100 @@ class AssetController extends Controller
         return back()->with('success', 'Jurnal perolehan aset diposting.');
     }
 
+    public function update(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'], 'category' => ['required', 'in:'.implode(',', array_keys(self::CATEGORIES))],
+            'serial_number' => ['nullable', 'string', 'max:128'], 'location' => ['nullable', 'string', 'max:160'],
+            'purchase_date' => ['required', 'date', 'before_or_equal:today'], 'purchase_cost' => ['required', 'numeric', 'min:0', 'max:99999999999999'],
+            'useful_life_months' => ['required', 'integer', 'min:1', 'max:600'], 'salvage_value' => ['nullable', 'numeric', 'min:0', 'lte:purchase_cost'],
+            'maintenance_interval_days' => ['nullable', 'integer', 'min:1', 'max:3650'], 'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        DB::transaction(function () use ($tenant, $request, $id, $data) {
+            $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->lockForUpdate()->first();
+            abort_unless($asset && ! in_array($asset->status, ['disposed', 'deleted'], true), 404);
+            $hasFinancialHistory = $asset->acquisition_journal_entry_id || DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->exists();
+            if ($hasFinancialHistory && (
+                $data['purchase_date'] !== $asset->purchase_date
+                || abs((float) $data['purchase_cost'] - (float) $asset->purchase_cost) > 0.004
+                || (int) $data['useful_life_months'] !== (int) $asset->useful_life_months
+                || abs((float) ($data['salvage_value'] ?? 0) - (float) $asset->salvage_value) > 0.004
+            )) {
+                throw ValidationException::withMessages(['purchase_cost' => 'Tanggal dan nilai perolehan tidak bisa diubah setelah jurnal perolehan atau penyusutan dicatat.']);
+            }
+
+            $interval = $data['maintenance_interval_days'] ?? null;
+            $dueDate = $asset->next_maintenance_due;
+            if ($interval != $asset->maintenance_interval_days) {
+                if (! $interval) {
+                    $dueDate = null;
+                } else {
+                    $lastService = DB::table('asset_maintenance_records')->where('business_asset_id', $asset->id)->max('performed_at');
+                    $dueDate = Carbon::parse($lastService ?: $data['purchase_date'])->addDays((int) $interval)->toDateString();
+                }
+            }
+            DB::table('business_assets')->where('id', $asset->id)->update([
+                'name' => $data['name'], 'category' => $data['category'], 'serial_number' => $data['serial_number'] ?? null,
+                'location' => $data['location'] ?? null, 'purchase_date' => $data['purchase_date'],
+                'purchase_cost' => $data['purchase_cost'], 'useful_life_months' => $data['useful_life_months'],
+                'salvage_value' => $data['salvage_value'] ?? 0, 'maintenance_interval_days' => $interval,
+                'next_maintenance_due' => $dueDate, 'notes' => $data['notes'] ?? null, 'updated_at' => now($tenant->timezone),
+            ]);
+            DB::table('audit_logs')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $asset->outlet_id,
+                'actor_user_id' => auth()->id(), 'action' => 'asset.updated', 'subject_type' => 'business_asset', 'subject_id' => $asset->id,
+                'after' => json_encode(['name' => $data['name'], 'category' => $data['category']]), 'occurred_at' => now($tenant->timezone),
+            ]);
+        }, attempts: 3);
+
+        return back()->with('success', 'Data aset berhasil diperbarui.');
+    }
+
+    public function toggleStatus(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->first();
+        abort_unless($asset && in_array($asset->status, ['active', 'inactive'], true), 422, 'Aset dilepas atau dihapus tidak bisa diaktifkan/nonaktifkan.');
+        $status = $asset->status === 'active' ? 'inactive' : 'active';
+        DB::table('business_assets')->where('id', $id)->update(['status' => $status, 'updated_at' => now($tenant->timezone)]);
+
+        return back()->with('success', $status === 'active' ? 'Aset diaktifkan kembali.' : 'Aset dinonaktifkan.');
+    }
+
+    public function destroy(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->first();
+        abort_unless($asset && ! in_array($asset->status, ['disposed', 'deleted'], true), 404);
+        if ($asset->acquisition_journal_entry_id || DB::table('asset_depreciation_entries')->where('business_asset_id', $id)->exists()) {
+            throw ValidationException::withMessages(['asset' => 'Aset sudah memiliki catatan akuntansi dan tidak bisa dihapus. Nonaktifkan atau lepas aset agar histori tetap aman.']);
+        }
+        DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->update([
+            'status' => 'deleted', 'next_maintenance_due' => null, 'updated_at' => now($tenant->timezone),
+        ]);
+
+        return redirect()->route('assets.index')->with('success', 'Aset dihapus dari daftar aktif. Histori maintenance tetap tersimpan dan aset bisa dipulihkan.');
+    }
+
+    public function restore(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $updated = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->where('status', 'deleted')
+            ->update(['status' => 'inactive', 'updated_at' => now($tenant->timezone)]);
+        abort_unless($updated, 422, 'Aset ini tidak ada di daftar dihapus.');
+
+        return redirect()->route('assets.index')->with('success', 'Aset dipulihkan dalam status nonaktif.');
+    }
+
     /**
      * Dr Aset Tetap (1500); Cr kas, bank, atau Modal Pemilik (aset disetor pemilik).
      */
     private function postAcquisition(object $tenant, object $outlet, string $assetId, string $funding, $now): void
     {
         $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $assetId)->lockForUpdate()->first();
-        abort_unless($asset, 404);
+        abort_unless($asset && ! in_array($asset->status, ['disposed', 'deleted'], true), 404);
         abort_if($asset->acquisition_journal_entry_id, 422, 'Jurnal perolehan aset ini sudah diposting.');
         $cost = round((float) $asset->purchase_cost, 2);
         if ($cost <= 0) {
@@ -141,7 +237,7 @@ class AssetController extends Controller
             $expense = $this->systemAccount($tenant->id, '6080', 'Beban Penyusutan', 'expense', 'debit', $now);
             $accumulated = $this->systemAccount($tenant->id, '1590', 'Akumulasi Penyusutan', 'asset', 'credit', $now);
             $count = 0;
-            $assets = DB::table('business_assets')->where('tenant_id', $tenant->id)->lockForUpdate()->get();
+            $assets = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('status', '!=', 'deleted')->lockForUpdate()->get();
             foreach ($assets as $asset) {
                 $depreciable = round(max(0.0, (float) $asset->purchase_cost - (float) $asset->salvage_value), 2);
                 if ($depreciable <= 0) {
@@ -211,7 +307,7 @@ class AssetController extends Controller
     {
         $tenant = $request->attributes->get('tenant');
         $asset = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->first();
-        abort_unless($asset && $asset->status !== 'disposed', 404);
+        abort_unless($asset && ! in_array($asset->status, ['disposed', 'deleted'], true), 404);
         $data = $request->validate([
             'performed_at' => ['required', 'date', 'before_or_equal:today'], 'description' => ['required', 'string', 'max:500'],
             'cost' => ['nullable', 'numeric', 'min:0', 'max:99999999999999'], 'performed_by' => ['nullable', 'string', 'max:160'],
@@ -238,7 +334,7 @@ class AssetController extends Controller
     {
         $tenant = $request->attributes->get('tenant');
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
-        $updated = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->where('status', '!=', 'disposed')->update([
+        $updated = DB::table('business_assets')->where('tenant_id', $tenant->id)->where('id', $id)->whereNotIn('status', ['disposed', 'deleted'])->update([
             'status' => 'disposed', 'disposed_at' => now($tenant->timezone)->toDateString(), 'disposal_reason' => $data['reason'],
             'next_maintenance_due' => null, 'updated_at' => now(),
         ]);

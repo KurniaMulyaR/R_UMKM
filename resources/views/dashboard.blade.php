@@ -20,7 +20,7 @@
 <div id="dashboard-app"></div>
 @if($canSeeFinance)
 <div class="feature-summary" style="margin-top:16px">
-    <a class="card feature-stat" href="{{ route('customers.aging') }}"><span class="feature-stat-icon partial-icon">Rp</span><div><small>Piutang pelanggan ({{ $position['receivableCustomers'] }} pelanggan)</small><b>{{ $rp($position['receivable']) }}</b></div></a>
+    <a class="card feature-stat" href="{{ route('customers.aging') }}"><span class="feature-stat-icon partial-icon">Rp</span><div><small>Piutang anggota ({{ $position['receivableCustomers'] }} anggota)</small><b>{{ $rp($position['receivable']) }}</b></div></a>
     <div class="card feature-stat"><span class="feature-stat-icon planned-icon">Rp</span><div><small>Hutang ke supplier</small><b>{{ $rp($position['payable']) }}</b></div></div>
     <div class="card feature-stat"><span class="feature-stat-icon ready-icon">Rp</span><div><small>Nilai persediaan outlet ini</small><b>{{ $rp($position['inventory']) }}</b></div></div>
 </div>
