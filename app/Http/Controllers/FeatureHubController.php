@@ -31,7 +31,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Invoice, surat jalan & kwitansi', 'status' => 'Sebagian', 'summary' => 'Invoice, surat jalan, dan kwitansi (dengan terbilang) bernomor otomatis, siap cetak/PDF dari detail transaksi. Pengiriman WhatsApp/email dan template logo belum ada.'],
                     ['name' => 'Pengeluaran & rekonsiliasi kas/bank', 'status' => 'Ada', 'summary' => 'Biaya operasional per kategori terhubung shift dan jurnal, plus rekonsiliasi kas/bank/QRIS terhadap saldo rekening.'],
                     ['name' => 'COA, jurnal & tutup periode', 'status' => 'Ada', 'summary' => 'COA sistem + akun sendiri, jurnal otomatis dan manual, import jurnal CSV, buku besar, tutup/buka periode dengan kunci posting.'],
-                    ['name' => 'Laporan usaha', 'status' => 'Sebagian', 'summary' => 'Laba rugi, neraca, buku besar, umur hutang. Arus kas dan ekspor PDF/Excel belum ada.'],
+                    ['name' => 'Laporan usaha', 'status' => 'Sebagian', 'summary' => 'Laba rugi, neraca, arus kas (ekspor CSV), buku besar, umur hutang dan piutang. Ekspor PDF/Excel untuk laporan lain belum ada.'],
                 ],
             ],
             [

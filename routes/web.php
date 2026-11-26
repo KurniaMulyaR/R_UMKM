@@ -23,6 +23,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\StockCountController;
+use App\Http\Controllers\CashFlowController;
 use App\Http\Controllers\StockTransferController;
 use App\Http\Controllers\OutletController;
 use App\Http\Controllers\SalesController;
@@ -140,6 +141,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/reports/periods', [AccountingPeriodController::class, 'index'])->middleware('role:owner,manager')->name('reports.periods');
     Route::post('/reports/periods/close', [AccountingPeriodController::class, 'close'])->middleware('role:owner')->name('reports.periods.close');
     Route::post('/reports/periods/reopen', [AccountingPeriodController::class, 'reopen'])->middleware('role:owner')->name('reports.periods.reopen');
+    Route::get('/reports/cash-flow', [CashFlowController::class, 'index'])->middleware('role:owner,manager')->name('reports.cash-flow');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');
     Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');

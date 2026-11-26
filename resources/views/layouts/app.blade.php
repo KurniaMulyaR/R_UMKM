@@ -34,6 +34,7 @@
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Buku besar', 'href' => route('ledger.index'), 'icon' => 'receipt', 'active' => request()->routeIs('ledger.*')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Jurnal', 'href' => route('journals.index'), 'icon' => 'receipt', 'active' => request()->routeIs('journals.*')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Daftar akun', 'href' => route('accounts.index'), 'icon' => 'grid', 'active' => request()->routeIs('accounts.*')];
+        $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Arus kas', 'href' => route('reports.cash-flow'), 'icon' => 'wallet', 'active' => request()->routeIs('reports.cash-flow')];
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.profit-loss')];
     }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
