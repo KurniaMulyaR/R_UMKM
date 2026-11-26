@@ -103,9 +103,9 @@ const txIcon = (r) => (r.credit ? 'wallet' : 'arrowDown');
         </div>
 
         <div class="kpi-strip">
-            <article class="card kpi"><span class="kpi-icon" style="background:var(--primary-soft);color:var(--primary)"><Icon name="sales" /></span><div><small>Omzet hari ini</small><b>{{ rp(summary.revenue) }}</b></div></article>
+            <article class="card kpi"><span class="kpi-icon" style="background:var(--primary-soft);color:var(--primary)"><Icon name="sales" /></span><div><small>Omzet {{ summary.periodLabel }}</small><b>{{ rp(summary.revenue) }}</b></div></article>
             <article class="card kpi"><span class="kpi-icon" style="background:var(--teal-soft);color:var(--teal)"><Icon name="receipt" /></span><div><small>Transaksi selesai</small><b>{{ nf.format(summary.transactions) }}</b></div></article>
-            <article class="card kpi"><span class="kpi-icon" style="background:var(--violet-soft);color:var(--violet)"><Icon name="spark" /></span><div><small>Untung kotor</small><b>{{ rp(summary.grossProfit) }}</b></div></article>
+            <article class="card kpi"><span class="kpi-icon" style="background:var(--violet-soft);color:var(--violet)"><Icon name="spark" /></span><div><small>Untung kotor {{ summary.periodLabel }}</small><b>{{ rp(summary.grossProfit) }}</b></div></article>
             <article class="card kpi"><span class="kpi-icon" style="background:var(--amber-soft);color:var(--amber)"><Icon name="box" /></span><div><small>Produk aktif</small><b>{{ nf.format(summary.products) }}</b></div></article>
         </div>
 

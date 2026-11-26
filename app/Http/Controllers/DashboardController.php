@@ -14,15 +14,12 @@ class DashboardController extends Controller
         $tenant = $request->attributes->get('tenant');
         $outlet = $request->attributes->get('outlet');
         $day = now($tenant->timezone)->toDateString();
-        $sales = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
-            ->where('status', 'completed')->whereDate('sold_at', $day);
+        [$range, $from, $to, $periodLabel] = $this->period($request, $tenant->timezone);
         $summary = [
-            'revenue' => (clone $sales)->sum(DB::raw('grand_total - returned_total')),
-            'transactions' => (clone $sales)->count(),
-            'gross_profit' => DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                ->where('sales.tenant_id', $tenant->id)->where('sales.outlet_id', $outlet->id)
-                ->where('sales.status', 'completed')->whereDate('sales.sold_at', $day)
-                ->sum(DB::raw('sale_items.line_total - sale_items.unit_cost_snapshot * sale_items.quantity')),
+            'revenue' => $this->salesInRange($tenant->id, $outlet->id, $from, $to)->sum(DB::raw('grand_total - returned_total')),
+            'transactions' => $this->salesInRange($tenant->id, $outlet->id, $from, $to)->count(),
+            'gross_profit' => $this->grossProfit($tenant->id, $outlet->id, $from, $to),
+            'period_label' => $periodLabel,
         ];
         $weekStart = Carbon::now($tenant->timezone)->subDays(6)->startOfDay();
         $dailySales = DB::table('sales')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
@@ -44,7 +41,7 @@ class DashboardController extends Controller
         $lowStock = DB::table('products')->join('product_variants', 'product_variants.product_id', '=', 'products.id')
             ->leftJoin('stock_balances', function ($join) use ($outlet) {
                 $join->on('stock_balances.product_variant_id', '=', 'product_variants.id')->where('stock_balances.outlet_id', '=', $outlet->id);
-            })->where('products.tenant_id', $tenant->id)->where('products.is_active', true)->where('products.track_stock', true)
+            })->where('products.tenant_id', $tenant->id)->where('products.is_active', true)->where('products.track_stock', true)->where('product_variants.is_active', true)->whereNull('products.deleted_at')
             ->whereRaw('COALESCE(stock_balances.quantity_on_hand, 0) <= COALESCE(products.min_stock, 0)')
             ->select('products.id', 'products.name', 'products.sku', 'products.min_stock', 'product_variants.id as variant_id', 'stock_balances.quantity_on_hand')
             ->orderBy('products.name')->limit(6)->get();
@@ -58,7 +55,9 @@ class DashboardController extends Controller
 
         $overview = $this->overview($tenant, $outlet, $summary, $weeklyActivity, $lowStock, $recentSales, $productCount, (bool) $openShift);
 
-        return view('dashboard', compact('tenant', 'outlet', 'summary', 'lowStock', 'recentSales', 'openShift', 'day', 'productCount', 'weeklyActivity', 'maxDailyRevenue', 'overview'));
+        $position = $this->financialPosition($tenant, $outlet);
+
+        return view('dashboard', compact('tenant', 'outlet', 'summary', 'lowStock', 'recentSales', 'openShift', 'day', 'productCount', 'weeklyActivity', 'maxDailyRevenue', 'overview', 'range', 'position'));
     }
 
     /** Data untuk komponen DashboardOverview.vue (kartu kas, grafik, donat, transaksi terbaru). */
@@ -97,15 +96,15 @@ class DashboardController extends Controller
             return ['label' => $date->format('d/m'), 'revenue' => (float) ($trendRows[$date->toDateString()] ?? 0)];
         })->values();
 
-        // Untung kotor per hari (7 hari) untuk grafik batang ganda.
-        $profitRows = DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->where('sales.tenant_id', $tenant->id)->where('sales.outlet_id', $outlet->id)->where('sales.status', 'completed')
-            ->where('sales.sold_at', '>=', $weekStart)
-            ->selectRaw('DATE(sales.sold_at) as d, SUM(sale_items.line_total - sale_items.unit_cost_snapshot * sale_items.quantity) as profit')
-            ->groupByRaw('DATE(sales.sold_at)')->pluck('profit', 'd');
+        // Untung kotor per hari (7 hari) untuk grafik batang ganda, sudah dikurangi retur.
+        $profitRows = collect(range(6, 0))->mapWithKeys(function (int $ago) use ($tenant, $outlet, $tz) {
+            $date = Carbon::now($tz)->subDays($ago)->toDateString();
+
+            return [$date => $this->grossProfit($tenant->id, $outlet->id, $date, $date)];
+        });
 
         return [
-            'summary' => ['revenue' => (float) $summary['revenue'], 'transactions' => (int) $summary['transactions'], 'grossProfit' => (float) $summary['gross_profit'], 'products' => $productCount],
+            'summary' => ['revenue' => (float) $summary['revenue'], 'transactions' => (int) $summary['transactions'], 'grossProfit' => (float) $summary['gross_profit'], 'products' => $productCount, 'periodLabel' => $summary['period_label']],
             'cashAccounts' => $cashAccounts,
             'week' => $weeklyActivity->map(fn ($day) => $day + ['profit' => (float) ($profitRows[$day['date']] ?? 0)])->values(),
             'methods' => $methods,
@@ -119,6 +118,61 @@ class DashboardController extends Controller
             ])->values(),
             'shiftOpen' => $shiftOpen,
             'urls' => ['pos' => route('pos.index'), 'sales' => route('sales.index'), 'products' => route('products.index'), 'shifts' => route('shifts.index'), 'customers' => route('customers.index'), 'features' => route('features.index')],
+        ];
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string, 3: string}
+     */
+    private function period(Request $request, string $timezone): array
+    {
+        $now = Carbon::now($timezone);
+        $range = (string) $request->query('range', 'today');
+
+        return match ($range) {
+            '7' => ['7', $now->copy()->subDays(6)->toDateString(), $now->toDateString(), '7 hari terakhir'],
+            '30' => ['30', $now->copy()->subDays(29)->toDateString(), $now->toDateString(), '30 hari terakhir'],
+            'month' => ['month', $now->copy()->startOfMonth()->toDateString(), $now->toDateString(), 'bulan ini'],
+            default => ['today', $now->toDateString(), $now->toDateString(), 'hari ini'],
+        };
+    }
+
+    private function salesInRange(string $tenantId, string $outletId, string $from, string $to)
+    {
+        return DB::table('sales')->where('tenant_id', $tenantId)->where('outlet_id', $outletId)->where('status', 'completed')
+            ->whereDate('sold_at', '>=', $from)->whereDate('sold_at', '<=', $to);
+    }
+
+    /**
+     * Untung kotor = penjualan bersih dikurangi HPP, setelah retur: refund mengurangi omzet, barang retur yang masuk stok
+     * mengembalikan HPP-nya (restock_value). Retur dikaitkan ke tanggal penjualan asli, sama seperti omzet.
+     */
+    private function grossProfit(string $tenantId, string $outletId, string $from, string $to): float
+    {
+        $items = (float) DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->where('sales.tenant_id', $tenantId)->where('sales.outlet_id', $outletId)->where('sales.status', 'completed')
+            ->whereDate('sales.sold_at', '>=', $from)->whereDate('sales.sold_at', '<=', $to)
+            ->sum(DB::raw('sale_items.line_total - sale_items.unit_cost_snapshot * sale_items.quantity'));
+        $returns = DB::table('sale_returns')->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
+            ->where('sales.tenant_id', $tenantId)->where('sales.outlet_id', $outletId)->where('sales.status', 'completed')->where('sale_returns.status', 'completed')
+            ->whereDate('sales.sold_at', '>=', $from)->whereDate('sales.sold_at', '<=', $to)
+            ->selectRaw('COALESCE(SUM(sale_returns.refund_total), 0) as refunded, COALESCE(SUM(sale_returns.restock_value), 0) as restocked')->first();
+
+        return round($items - (float) $returns->refunded + (float) $returns->restocked, 2);
+    }
+
+    /**
+     * @return array{receivable: float, receivableCustomers: int, payable: float, inventory: float}
+     */
+    private function financialPosition(object $tenant, object $outlet): array
+    {
+        $receivables = CustomerController::openReceivables($tenant->id);
+        $payable = (float) DB::table('supplier_bills')->where('tenant_id', $tenant->id)->whereNotIn('status', ['draft', 'cancelled'])->where('balance_due', '>', 0.004)->sum('balance_due');
+        $inventory = (float) DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)->sum('inventory_value');
+
+        return [
+            'receivable' => round((float) $receivables->sum('outstanding'), 2), 'receivableCustomers' => $receivables->pluck('customer_id')->unique()->count(),
+            'payable' => round($payable, 2), 'inventory' => round($inventory, 2),
         ];
     }
 }
