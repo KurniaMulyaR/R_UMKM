@@ -20,7 +20,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Transaksi, void & retur', 'status' => 'Ada', 'summary' => 'Riwayat transaksi, void dengan jurnal pembalik, dan retur penjualan sebagian/penuh (stok, kasbon, refund, shift).'],
                     ['name' => 'Dashboard & laporan', 'status' => 'Sebagian', 'summary' => 'Ringkasan omzet, transaksi, perkiraan laba kotor, stok menipis, dan transaksi terbaru. Laporan periodik belum ada.'],
                     ['name' => 'Tenant, outlet & hak akses', 'status' => 'Sebagian', 'summary' => 'Akun usaha, outlet awal, dan peran dasar. Pengelolaan banyak outlet serta permission granular belum ada.'],
-                    ['name' => 'Audit & event transaksi', 'status' => 'Sebagian', 'summary' => 'Audit log dan outbox untuk transaksi inti. Viewer audit dan pemrosesan event terjadwal belum ada.'],
+                    ['name' => 'Audit & event transaksi', 'status' => 'Sebagian', 'summary' => 'Audit log untuk transaksi inti dengan penampil (filter aksi, pengguna, tanggal) khusus owner. Pemrosesan event outbox terjadwal belum ada.'],
                 ],
             ],
             [
