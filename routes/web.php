@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AssetController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\SetupController;
 use App\Http\Controllers\CustomerController;
@@ -174,6 +176,26 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/', [ExpenseController::class, 'index'])->name('index');
         Route::post('/', [ExpenseController::class, 'store'])->name('store');
         Route::post('/{id}/void', [ExpenseController::class, 'void'])->name('void');
+    });
+    Route::middleware('role:owner,manager')->prefix('employees')->name('employees.')->group(function () {
+        Route::get('/', [EmployeeController::class, 'index'])->name('index');
+        Route::post('/', [EmployeeController::class, 'store'])->name('store');
+        Route::get('/{id}', [EmployeeController::class, 'show'])->name('show');
+        Route::put('/{id}', [EmployeeController::class, 'update'])->name('update');
+        Route::post('/{id}/status/{status}', [EmployeeController::class, 'setStatus'])->name('status');
+        Route::post('/{id}/reviews', [EmployeeController::class, 'storeReview'])->name('reviews.store');
+    });
+    Route::middleware('role:owner,manager')->prefix('payroll')->name('payroll.')->group(function () {
+        Route::get('/', [PayrollController::class, 'index'])->name('index');
+        Route::post('/', [PayrollController::class, 'store'])->name('store');
+        Route::get('/{id}', [PayrollController::class, 'show'])->name('show');
+        Route::put('/{id}/items', [PayrollController::class, 'updateItems'])->name('items.update');
+        Route::delete('/{id}', [PayrollController::class, 'destroy'])->name('destroy');
+        Route::get('/{id}/slip/{itemId}', [PayrollController::class, 'slip'])->name('slip');
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/{id}/post', [PayrollController::class, 'post'])->name('post');
+            Route::post('/{id}/pay', [PayrollController::class, 'pay'])->name('pay');
+        });
     });
     Route::middleware('role:owner,manager')->prefix('assets')->name('assets.')->group(function () {
         Route::get('/', [AssetController::class, 'index'])->name('index');

@@ -14,6 +14,8 @@
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Umur piutang', 'href' => route('customers.aging'), 'icon' => 'clock', 'active' => request()->routeIs('customers.aging')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Opname stok', 'href' => route('stock-counts.index'), 'icon' => 'box', 'active' => request()->routeIs('stock-counts.*')];
         $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Aset usaha', 'href' => route('assets.index'), 'icon' => 'wallet', 'active' => request()->routeIs('assets.*')];
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Karyawan', 'href' => route('employees.index'), 'icon' => 'team', 'active' => request()->routeIs('employees.*')];
+        $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Payroll', 'href' => route('payroll.index'), 'icon' => 'wallet', 'active' => request()->routeIs('payroll.*')];
         if (($currentRole->key ?? '') === 'owner') {
             $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Pengaturan usaha', 'href' => route('settings.edit'), 'icon' => 'grid', 'active' => request()->routeIs('settings.*')];
             $sidebarLinks[] = ['group' => 'DATA USAHA', 'label' => 'Audit log', 'href' => route('audit-logs.index'), 'icon' => 'check', 'active' => request()->routeIs('audit-logs.*')];
