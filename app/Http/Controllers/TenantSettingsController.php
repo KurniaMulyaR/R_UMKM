@@ -39,7 +39,7 @@ class TenantSettingsController extends Controller
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $request->attributes->get('outlet')->id ?? null, 'actor_user_id' => auth()->id(),
                 'action' => 'tenant.updated', 'subject_type' => 'tenant', 'subject_id' => $tenant->id, 'before' => json_encode(['name' => $tenant->name, 'timezone' => $tenant->timezone]),
-                'after' => json_encode(['name' => $data['name'], 'timezone' => $data['timezone']]), 'ip_address' => $request->ip(), 'occurred_at' => $now, 'created_at' => $now,
+                'after' => json_encode(['name' => $data['name'], 'timezone' => $data['timezone']]), 'ip_address' => $request->ip(), 'occurred_at' => $now,
             ]);
         });
 

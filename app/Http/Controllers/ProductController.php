@@ -23,7 +23,7 @@ class ProductController extends Controller
                 $join->on('product_prices.product_variant_id', '=', 'product_variants.id')->where('product_prices.price_type', '=', 'retail')->where('product_prices.is_active', '=', true)->whereColumn('product_prices.unit_id', 'products.base_unit_id')
                     ->where(function ($q) use ($outlet) { $q->whereNull('product_prices.outlet_id')->orWhere('product_prices.outlet_id', $outlet->id); });
             })->leftJoin('stock_balances', function ($join) use ($outlet) { $join->on('stock_balances.product_variant_id', '=', 'product_variants.id')->where('stock_balances.outlet_id', '=', $outlet->id); })
-            ->where('products.tenant_id', $tenant->id)
+            ->where('products.tenant_id', $tenant->id)->where('product_variants.is_active', true)
             ->when($archived, fn ($query) => $query->whereNotNull('products.deleted_at'), fn ($query) => $query->whereNull('products.deleted_at'))
             ->select('products.*', 'product_variants.name as variant_name', 'product_variants.id as variant_id', 'product_variants.cost_price', 'product_categories.name as category_name', 'product_prices.price', 'stock_balances.quantity_on_hand')
             ->selectSub(DB::table('product_barcodes')->select('barcode')->whereColumn('product_barcodes.product_variant_id', 'product_variants.id')->orderByDesc('is_primary')->limit(1), 'barcode')
@@ -162,7 +162,7 @@ class ProductController extends Controller
             ->first();
         abort_unless($product, 404);
 
-        $variants = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $product->id)->orderBy('name')->get();
+        $variants = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $product->id)->where('is_active', true)->orderBy('created_at')->get();
         abort_unless($variants->isNotEmpty(), 404);
         $variantIds = $variants->pluck('id');
         $allowedOutletIds = DB::table('user_outlet')->where('tenant_user_id', $membership->id)->where('status', 'active')->pluck('outlet_id');
@@ -235,7 +235,7 @@ class ProductController extends Controller
 
         $prices = DB::table('product_prices')->leftJoin('outlets', 'outlets.id', '=', 'product_prices.outlet_id')
             ->where('product_prices.tenant_id', $tenant->id)->whereIn('product_prices.product_variant_id', $variantIds)
-            ->where('product_prices.price_type', 'retail')->where('product_prices.is_active', true)
+            ->where('product_prices.price_type', 'retail')->where('product_prices.is_active', true)->where('product_prices.unit_id', $product->base_unit_id)
             ->where(fn ($query) => $query->whereNull('product_prices.outlet_id')->orWhereIn('product_prices.outlet_id', $allowedOutletIds->isEmpty() ? DB::table('outlets')->where('tenant_id', $tenant->id)->select('id') : $allowedOutletIds))
             ->select('product_prices.*', 'outlets.name as outlet_name')->orderBy('outlets.name')->get();
         $barcodes = DB::table('product_barcodes')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)

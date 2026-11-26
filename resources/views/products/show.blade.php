@@ -34,6 +34,7 @@
 
 <div class="card section-card">
     <h2>Varian</h2>
+    @if(in_array($currentRole->key ?? '', ['owner', 'manager'], true))<p><a class="small-link" href="{{ route('products.variants', $product->id) }}">Kelola varian &amp; satuan jual</a></p>@endif
     <div class="table-wrap">
         <table>
             <thead><tr><th>NAMA</th><th>SKU</th><th>MODAL</th><th>STATUS</th></tr></thead>

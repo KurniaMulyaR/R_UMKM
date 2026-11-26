@@ -142,7 +142,7 @@ class StaffController extends Controller
     {
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $request->attributes->get('outlet')->id ?? null, 'actor_user_id' => auth()->id(), 'action' => $action,
-            'subject_type' => 'user', 'subject_id' => $userId, 'after' => json_encode($after), 'ip_address' => $request->ip(), 'occurred_at' => $now, 'created_at' => $now,
+            'subject_type' => 'user', 'subject_id' => $userId, 'after' => json_encode($after), 'ip_address' => $request->ip(), 'occurred_at' => $now,
         ]);
     }
 }

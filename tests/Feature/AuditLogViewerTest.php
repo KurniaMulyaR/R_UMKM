@@ -33,7 +33,7 @@ class AuditLogViewerTest extends TestCase
     public function test_only_current_tenant_logs_are_shown(): void
     {
         $this->prepare();
-        DB::table('audit_logs')->insert(['id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => null, 'action' => 'foreign.secret_action', 'subject_type' => 'x', 'occurred_at' => now(), 'created_at' => now()]);
+        DB::table('audit_logs')->insert(['id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => null, 'action' => 'foreign.secret_action', 'subject_type' => 'x', 'occurred_at' => now()]);
         $this->get(route('audit-logs.index'))->assertOk()->assertDontSee('foreign.secret_action');
     }
 }
