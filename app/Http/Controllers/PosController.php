@@ -20,7 +20,7 @@ class PosController extends Controller
             ->leftJoin('product_categories', 'product_categories.id', '=', 'products.category_id')
             ->where('products.tenant_id', $tenant->id)->where('products.is_active', true)->where('product_variants.is_active', true)
             ->whereNull('products.deleted_at')->select('product_variants.id as variant_id', 'products.id as product_id', 'products.name', 'products.sku',
-                'products.track_stock', 'units.symbol as unit_symbol', 'product_categories.name as category_name', 'product_variants.cost_price')->orderBy('products.name')->get();
+                'products.track_stock', 'products.base_unit_id', 'product_variants.name as variant_name', 'units.symbol as unit_symbol', 'product_categories.name as category_name', 'product_variants.cost_price')->orderBy('products.name')->orderBy('product_variants.created_at')->get();
         $variantIds = $variants->pluck('variant_id')->all();
         $now = now();
         $prices = DB::table('product_prices')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)
@@ -28,19 +28,34 @@ class PosController extends Controller
             ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
             ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $now))
             ->where(fn ($q) => $q->whereNull('outlet_id')->orWhere('outlet_id', $outlet->id))
-            ->get()->sortByDesc(fn ($price) => $price->outlet_id === $outlet->id ? 1 : 0)->groupBy('product_variant_id')->map->first();
+            ->get()->sortByDesc(fn ($price) => $price->outlet_id === $outlet->id ? 1 : 0)->groupBy(fn ($price) => $price->product_variant_id.'|'.$price->unit_id)->map->first();
         $stocks = DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->whereIn('product_variant_id', $variantIds)->pluck('quantity_on_hand', 'product_variant_id');
         $barcodes = DB::table('product_barcodes')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)
             ->pluck('barcode', 'product_variant_id');
-        $catalog = $variants->map(function ($row) use ($prices, $stocks, $barcodes) {
-            return (object) [
-                'variant_id' => $row->variant_id, 'product_id' => $row->product_id, 'name' => $row->name,
-                'sku' => $row->sku, 'track_stock' => (bool) $row->track_stock, 'unit_symbol' => $row->unit_symbol,
-                'category_name' => $row->category_name, 'price' => (float) ($prices[$row->variant_id]->price ?? 0),
-                'stock' => (float) ($stocks[$row->variant_id] ?? 0), 'barcode' => $barcodes[$row->variant_id] ?? null,
-            ];
-        })->filter(fn ($item) => $item->price > 0)->values();
+        $conversions = DB::table('product_unit_conversions')->join('units', 'units.id', '=', 'product_unit_conversions.unit_id')->where('product_unit_conversions.tenant_id', $tenant->id)
+            ->where('product_unit_conversions.is_sell_unit', true)->get(['product_unit_conversions.product_id', 'product_unit_conversions.unit_id', 'product_unit_conversions.base_quantity', 'units.name as unit_name', 'units.symbol'])->groupBy('product_id');
+        $catalog = collect();
+        foreach ($variants as $row) {
+            $displayName = $row->name.($row->variant_name !== 'Default' ? ' — '.$row->variant_name : '');
+            $basePrice = (float) ($prices[$row->variant_id.'|'.$row->base_unit_id]->price ?? 0);
+            $stock = (float) ($stocks[$row->variant_id] ?? 0);
+            $catalog->push((object) [
+                'cart_key' => $row->variant_id.':', 'variant_id' => $row->variant_id, 'unit_id' => null, 'factor' => 1, 'product_id' => $row->product_id, 'name' => $displayName,
+                'sku' => $row->sku, 'track_stock' => (bool) $row->track_stock, 'unit_symbol' => $row->unit_symbol, 'category_name' => $row->category_name,
+                'price' => $basePrice, 'stock' => $stock, 'barcode' => $barcodes[$row->variant_id] ?? null,
+            ]);
+            foreach ($conversions[$row->product_id] ?? [] as $conversion) {
+                $unitPrice = (float) ($prices[$row->variant_id.'|'.$conversion->unit_id]->price ?? 0);
+                $factor = (float) $conversion->base_quantity;
+                $catalog->push((object) [
+                    'cart_key' => $row->variant_id.':'.$conversion->unit_id, 'variant_id' => $row->variant_id, 'unit_id' => $conversion->unit_id, 'factor' => $factor, 'product_id' => $row->product_id,
+                    'name' => $displayName.' ('.$conversion->unit_name.')', 'sku' => $row->sku, 'track_stock' => (bool) $row->track_stock, 'unit_symbol' => $conversion->symbol, 'category_name' => $row->category_name,
+                    'price' => $unitPrice, 'stock' => floor($stock / $factor * 10000) / 10000, 'barcode' => null,
+                ]);
+            }
+        }
+        $catalog = $catalog->filter(fn ($item) => $item->price > 0)->values();
         $customers = DB::table('customers')->where('tenant_id', $tenant->id)->where('is_active', true)->whereNull('deleted_at')->orderBy('name')->get();
         $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
             ->where('cashier_user_id', auth()->id())->where('status', 'open')->first();
@@ -52,6 +67,29 @@ class PosController extends Controller
         return view('pos.index', compact('catalog', 'customers', 'shift', 'xenditEnabled', 'paidCharges'));
     }
 
+    /**
+     * Gabungkan item per varian+satuan. Satu varian hanya boleh dijual dalam satu satuan per transaksi
+     * agar pengecekan dan pemotongan stok tidak saling menimpa.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array{variant_id: string, unit_id: ?string, quantity: float}>
+     */
+    public static function normalizeItems(array $items): array
+    {
+        $grouped = [];
+        foreach ($items as $item) {
+            $unitId = $item['unit_id'] ?? null;
+            $unitId = $unitId === '' ? null : $unitId;
+            $variantId = $item['variant_id'];
+            if (isset($grouped[$variantId]) && $grouped[$variantId]['unit_id'] !== $unitId) {
+                throw ValidationException::withMessages(['items' => 'Satu produk hanya boleh satu satuan per transaksi. Hapus salah satu baris.']);
+            }
+            $grouped[$variantId] = ['variant_id' => $variantId, 'unit_id' => $unitId, 'quantity' => ($grouped[$variantId]['quantity'] ?? 0) + (float) $item['quantity']];
+        }
+
+        return array_values($grouped);
+    }
+
     public function checkout(Request $request): RedirectResponse
     {
         $tenant = $request->attributes->get('tenant'); $outlet = $request->attributes->get('outlet');
@@ -59,12 +97,12 @@ class PosController extends Controller
             'customer_id' => ['nullable', 'uuid'], 'discount' => ['nullable', 'numeric', 'min:0'],
             'cash_received' => ['nullable', 'numeric', 'min:0'], 'notes' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1', 'max:100'], 'items.*.variant_id' => ['required', 'uuid'],
-            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
+            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'], 'items.*.unit_id' => ['nullable', 'uuid'],
             'payments' => ['required', 'array', 'min:1', 'max:4'],
             'payments.*.method' => ['required', 'in:cash,bank_transfer,qris_external,credit'],
             'payments.*.amount' => ['required', 'numeric', 'gt:0'],
         ]);
-        $data['items'] = collect($data['items'])->groupBy('variant_id')->map(fn ($rows, $variantId) => ['variant_id' => $variantId, 'quantity' => $rows->sum('quantity')])->values()->all();
+        $data['items'] = self::normalizeItems($data['items']);
 
         if (! empty($data['customer_id'])) abort_unless(DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $data['customer_id'])->where('is_active', true)->exists(), 404);
         if (collect($data['payments'])->contains(fn ($payment) => $payment['method'] === 'credit') && empty($data['customer_id'])) {
@@ -114,7 +152,16 @@ class PosController extends Controller
                         ->select('product_variants.*', 'products.id as product_id', 'products.name as product_name', 'products.sku as product_sku',
                             'products.track_stock', 'products.allow_negative_stock', 'units.id as unit_id', 'units.symbol as unit_symbol')->first();
                     if (! $row) throw ValidationException::withMessages(['items' => 'Ada produk yang sudah tidak aktif. Muat ulang kasir.']);
-                    $price = DB::table('product_prices')->where('tenant_id', $tenant->id)->where('product_variant_id', $row->id)->where('price_type', 'retail')->where('is_active', true)
+                    $sellUnitId = $item['unit_id'] ?? $row->unit_id;
+                    $factor = 1.0; $unitSymbol = $row->unit_symbol;
+                    if ($sellUnitId !== $row->unit_id) {
+                        $conversion = DB::table('product_unit_conversions')->join('units', 'units.id', '=', 'product_unit_conversions.unit_id')->where('product_unit_conversions.tenant_id', $tenant->id)
+                            ->where('product_unit_conversions.product_id', $row->product_id)->where('product_unit_conversions.unit_id', $sellUnitId)->where('product_unit_conversions.is_sell_unit', true)
+                            ->first(['product_unit_conversions.base_quantity', 'units.symbol']);
+                        if (! $conversion) throw ValidationException::withMessages(['items' => 'Satuan jual '.$row->product_name.' tidak valid. Muat ulang kasir.']);
+                        $factor = (float) $conversion->base_quantity; $unitSymbol = $conversion->symbol;
+                    }
+                    $price = DB::table('product_prices')->where('tenant_id', $tenant->id)->where('product_variant_id', $row->id)->where('unit_id', $sellUnitId)->where('price_type', 'retail')->where('is_active', true)
                         ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', now()))
                         ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', now()))
                         ->where(fn ($q) => $q->whereNull('outlet_id')->orWhere('outlet_id', $outlet->id))
@@ -122,14 +169,16 @@ class PosController extends Controller
                     if (! $price) throw ValidationException::withMessages(['items' => 'Harga produk '.$row->product_name.' belum tersedia.']);
                     $balance = DB::table('stock_balances')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
                         ->where('product_variant_id', $row->id)->lockForUpdate()->first();
-                    $quantity = (float) $item['quantity'];
+                    $soldQuantity = (float) $item['quantity'];
+                    $quantity = round($soldQuantity * $factor, 4);
                     if ($row->track_stock && ! $row->allow_negative_stock && (float) ($balance->quantity_on_hand ?? 0) < $quantity) {
                         throw ValidationException::withMessages(['items' => 'Stok '.$row->product_name.' tidak cukup. Tersedia '.number_format((float) ($balance->quantity_on_hand ?? 0), 2, ',', '.').'.']);
                     }
                     $unitCost = $row->track_stock && $balance ? (float) $balance->average_cost : (float) ($row->cost_price ?? 0);
-                    $lineTotal = round($quantity * (float) $price->price, 2);
+                    $lineTotal = round($soldQuantity * (float) $price->price, 2);
                     $subtotal += $lineTotal;
-                    $lineRows[] = ['row' => $row, 'quantity' => $quantity, 'price' => (float) $price->price,
+                    $lineNote = $factor != 1.0 ? rtrim(rtrim(number_format($soldQuantity, 4, ',', '.'), '0'), ',').' '.$unitSymbol.' @ Rp '.number_format((float) $price->price, 0, ',', '.').' (1 '.$unitSymbol.' = '.rtrim(rtrim(number_format($factor, 4, ',', '.'), '0'), ',').' '.$row->unit_symbol.')' : null;
+                    $lineRows[] = ['row' => $row, 'quantity' => $quantity, 'note' => $lineNote, 'price' => $factor != 1.0 ? round((float) $price->price / $factor, 2) : (float) $price->price,
                         'unit_cost' => $unitCost, 'line_total' => $lineTotal, 'balance' => $balance];
                 }
                 $subtotal = round($subtotal, 2);
@@ -188,7 +237,7 @@ class PosController extends Controller
                         'product_id' => $row->product_id, 'product_variant_id' => $row->id, 'unit_id' => $row->unit_id,
                         'sku_snapshot' => $row->product_sku, 'name_snapshot' => $row->product_name, 'variant_snapshot' => $row->name,
                         'quantity' => $qty, 'base_quantity' => $qty, 'unit_price' => $line['price'], 'discount_amount' => $lineDiscount,
-                        'tax_amount' => 0, 'unit_cost_snapshot' => $cost, 'line_subtotal' => $line['line_total'],
+                        'tax_amount' => 0, 'unit_cost_snapshot' => $cost, 'line_subtotal' => $line['line_total'], 'note' => $line['note'] ?? null,
                         'line_total' => $netLineTotal, 'line_type' => 'product', 'created_at' => $now, 'updated_at' => $now,
                     ]);
                     if ($row->track_stock) {

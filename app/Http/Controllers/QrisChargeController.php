@@ -26,11 +26,11 @@ class QrisChargeController extends Controller
         }
         $data = $request->validate([
             'customer_id' => ['nullable', 'uuid'], 'discount' => ['nullable', 'numeric', 'min:0'], 'cash_received' => ['nullable', 'numeric', 'min:0'],
-            'notes' => ['nullable', 'string', 'max:1000'], 'items' => ['required', 'array', 'min:1', 'max:100'], 'items.*.variant_id' => ['required', 'uuid'],
+            'notes' => ['nullable', 'string', 'max:1000'], 'items' => ['required', 'array', 'min:1', 'max:100'], 'items.*.variant_id' => ['required', 'uuid'], 'items.*.unit_id' => ['nullable', 'uuid'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'], 'payments' => ['required', 'array', 'min:1', 'max:4'],
             'payments.*.method' => ['required', 'in:cash,bank_transfer,qris_external,qris_xendit,credit'], 'payments.*.amount' => ['required', 'numeric', 'gt:0'],
         ]);
-        $data['items'] = collect($data['items'])->groupBy('variant_id')->map(fn ($rows, $variantId) => ['variant_id' => $variantId, 'quantity' => $rows->sum('quantity')])->values()->all();
+        $data['items'] = PosController::normalizeItems($data['items']);
         $xenditTenders = collect($data['payments'])->where('method', 'qris_xendit');
         if ($xenditTenders->count() !== 1) {
             throw ValidationException::withMessages(['payments' => 'Pakai satu metode QRIS Xendit per transaksi.']);

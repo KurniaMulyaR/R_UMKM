@@ -63,6 +63,10 @@ function formatRupiah(value) {
 function addProduct(product) {
     message.value = '';
     const current = cart.value.find((item) => item.variant_id === product.variant_id);
+    if (current && (current.unit_id || null) !== (product.unit_id || null)) {
+        message.value = `${product.name} sudah ada di keranjang dengan satuan lain. Hapus barisnya dulu.`;
+        return;
+    }
     if (product.track_stock && (Number(current?.quantity || 0) + 1) > Number(product.stock || 0)) {
         message.value = `Stok ${product.name} tersisa ${product.stock}.`;
         return;
@@ -153,7 +157,7 @@ async function startQris() {
             method: 'POST', headers: qrisHeaders(), credentials: 'same-origin',
             body: JSON.stringify({
                 customer_id: customerId.value || null, discount: discountValue.value, cash_received: Number(cashReceived.value) || 0, notes: notes.value,
-                items: cart.value.map((item) => ({ variant_id: item.variant_id, quantity: item.quantity })),
+                items: cart.value.map((item) => ({ variant_id: item.variant_id, unit_id: item.unit_id || null, quantity: item.quantity })),
                 payments: payments.value.map((payment) => ({ method: payment.method, amount: Number(payment.amount) || 0 })),
             }),
         });
@@ -240,7 +244,7 @@ onBeforeUnmount(stopQrisTimer);
                 <button v-for="category in categories" :key="category" type="button" class="pill" :class="{ active: activeCategory === category }" @click="activeCategory = category">{{ category }}</button>
             </div>
             <div class="product-grid coop-product-grid">
-                <button v-for="product in filteredProducts" :key="product.variant_id" type="button" class="product-tile coop-product-tile" :disabled="product.track_stock && Number(product.stock) <= 0" @click="addProduct(product)">
+                <button v-for="product in filteredProducts" :key="product.cart_key" type="button" class="product-tile coop-product-tile" :disabled="product.track_stock && Number(product.stock) <= 0" @click="addProduct(product)">
                     <span class="product-color">{{ product.name.slice(0, 1).toLocaleUpperCase('id-ID') }}</span>
                     <span class="product-name">{{ product.name }}</span>
                     <span class="product-meta">{{ product.sku }} · {{ product.category_name || 'Umum' }}</span>
@@ -266,6 +270,7 @@ onBeforeUnmount(stopQrisTimer);
                 <input type="hidden" name="_token" :value="csrfToken">
                 <template v-for="(item, index) in cart" :key="item.variant_id">
                     <input type="hidden" :name="`items[${index}][variant_id]`" :value="item.variant_id">
+                    <input v-if="item.unit_id" type="hidden" :name="`items[${index}][unit_id]`" :value="item.unit_id">
                     <input type="hidden" :name="`items[${index}][quantity]`" :value="item.quantity">
                 </template>
                 <div class="cart-totals"><div class="total-row"><span>Subtotal</span><b>{{ formatRupiah(subtotal) }}</b></div><label>Potongan harga<input v-model.number="discount" name="discount" type="number" min="0" :max="subtotal" step="1" placeholder="0"></label><div v-if="discountValue" class="total-row discount-row"><span>Diskon</span><b>− {{ formatRupiah(discountValue) }}</b></div><div class="total-row grand"><span>Total belanja</span><b>{{ formatRupiah(total) }}</b></div></div>

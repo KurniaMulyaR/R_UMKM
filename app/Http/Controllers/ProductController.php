@@ -17,11 +17,11 @@ class ProductController extends Controller
         $products = DB::table('products')->join('product_variants', 'product_variants.product_id', '=', 'products.id')
             ->leftJoin('product_categories', 'product_categories.id', '=', 'products.category_id')
             ->leftJoin('product_prices', function ($join) use ($outlet) {
-                $join->on('product_prices.product_variant_id', '=', 'product_variants.id')->where('product_prices.price_type', '=', 'retail')->where('product_prices.is_active', '=', true)
+                $join->on('product_prices.product_variant_id', '=', 'product_variants.id')->where('product_prices.price_type', '=', 'retail')->where('product_prices.is_active', '=', true)->whereColumn('product_prices.unit_id', 'products.base_unit_id')
                     ->where(function ($q) use ($outlet) { $q->whereNull('product_prices.outlet_id')->orWhere('product_prices.outlet_id', $outlet->id); });
             })->leftJoin('stock_balances', function ($join) use ($outlet) { $join->on('stock_balances.product_variant_id', '=', 'product_variants.id')->where('stock_balances.outlet_id', '=', $outlet->id); })
-            ->where('products.tenant_id', $tenant->id)->whereNull('products.deleted_at')
-            ->select('products.*', 'product_variants.id as variant_id', 'product_variants.cost_price', 'product_categories.name as category_name', 'product_prices.price', 'stock_balances.quantity_on_hand')
+            ->where('products.tenant_id', $tenant->id)->whereNull('products.deleted_at')->where('product_variants.is_active', true)
+            ->select('products.*', 'product_variants.name as variant_name', 'product_variants.id as variant_id', 'product_variants.cost_price', 'product_categories.name as category_name', 'product_prices.price', 'stock_balances.quantity_on_hand')
             ->orderBy('products.name')->paginate(15);
         $categories = DB::table('product_categories')->where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('sort_order')->get();
         $units = DB::table('units')->where('tenant_id', $tenant->id)->orderBy('name')->get();
@@ -125,7 +125,7 @@ class ProductController extends Controller
         $outlet = $request->attributes->get('outlet');
         $product = DB::table('products')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->first();
         abort_unless($product, 404);
-        $variant = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $id)->first();
+        $variant = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $id)->orderBy('created_at')->first();
         abort_unless($variant, 404);
         $price = DB::table('product_prices')->where('tenant_id', $tenant->id)->where('product_variant_id', $variant->id)
             ->where('price_type', 'retail')->where('is_active', true)
@@ -143,7 +143,7 @@ class ProductController extends Controller
         $outlet = $request->attributes->get('outlet');
         $product = DB::table('products')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->first();
         abort_unless($product, 404);
-        $variant = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $id)->first();
+        $variant = DB::table('product_variants')->where('tenant_id', $tenant->id)->where('product_id', $id)->orderBy('created_at')->first();
         abort_unless($variant, 404);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'], 'sku' => ['required', 'string', 'max:80'],

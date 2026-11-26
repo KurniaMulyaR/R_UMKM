@@ -23,6 +23,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\StockCountController;
+use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CashFlowController;
 use App\Http\Controllers\StockTransferController;
@@ -63,6 +64,14 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::post('/products', [ProductController::class, 'store'])->middleware('role:owner,manager,warehouse')->name('products.store');
     Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->middleware('role:owner,manager')->name('products.edit');
+    Route::middleware('role:owner,manager')->prefix('products/{id}')->name('products.')->group(function () {
+        Route::get('/variants', [ProductVariantController::class, 'index'])->name('variants');
+        Route::post('/variants', [ProductVariantController::class, 'storeVariant'])->name('variants.store');
+        Route::post('/variants/{variantId}/archive', [ProductVariantController::class, 'archiveVariant'])->name('variants.archive');
+        Route::post('/units', [ProductVariantController::class, 'storeUnit'])->name('units.store');
+        Route::put('/units/{unitId}/prices', [ProductVariantController::class, 'updateUnitPrices'])->name('units.prices');
+        Route::delete('/units/{unitId}', [ProductVariantController::class, 'destroyUnit'])->name('units.destroy');
+    });
     Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('role:owner,manager')->name('products.update');
     Route::post('/products/{id}/archive', [ProductController::class, 'archive'])->middleware('role:owner,manager')->name('products.archive');
     Route::get('/staff', [StaffController::class, 'index'])->middleware('role:owner,manager')->name('staff.index');
