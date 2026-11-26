@@ -118,8 +118,9 @@ class PurchaseReturnController extends Controller
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(),
                 'action' => 'purchase_return.created', 'subject_type' => 'supplier_bill', 'subject_id' => $bill->id,
-                'after' => json_encode(['return' => $number, 'total' => $total, 'refund_due' => $refundDue]), 'reason' => $data['reason'], 'occurred_at' => $now, 'created_at' => $now,
+                'after' => json_encode(['return' => $number, 'total' => $total, 'refund_due' => $refundDue]), 'reason' => $data['reason'], 'occurred_at' => $now,
             ]);
+
 
             return $bill->purchase_order_id;
         }, attempts: 3);
@@ -177,8 +178,9 @@ class PurchaseReturnController extends Controller
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(),
                 'action' => 'purchase_return.refunded', 'subject_type' => 'supplier_bill', 'subject_id' => $return->supplier_bill_id,
-                'after' => json_encode(['return' => $return->return_number, 'amount' => $amount]), 'occurred_at' => $now, 'created_at' => $now,
+                'after' => json_encode(['return' => $return->return_number, 'amount' => $amount]), 'occurred_at' => $now,
             ]);
+
 
             return $return->supplier_bill_id;
         }, attempts: 3);

@@ -64,8 +64,9 @@ class StaffController extends Controller
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
                 'actor_user_id' => auth()->id(), 'action' => 'staff.created', 'subject_type' => 'user',
                 'subject_id' => $user->id, 'after' => json_encode(['role' => $data['role']]),
-                'occurred_at' => $now, 'created_at' => $now,
+                'occurred_at' => $now,
             ]);
+
         });
         return redirect()->route('staff.index')->with('success', 'Akun staf berhasil dibuat. Berikan nomor HP dan kata sandi awal kepada staf secara langsung.');
     }

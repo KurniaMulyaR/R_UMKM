@@ -5,6 +5,7 @@ import CoopShowcase from './components/CoopShowcase.vue';
 import FeatureCatalog from './components/FeatureCatalog.vue';
 import PosWorkspace from './components/PosWorkspace.vue';
 import DashboardOverview from './components/DashboardOverview.vue';
+import './product-actions.js';
 
 const ui = window.rKasirUi ?? {};
 

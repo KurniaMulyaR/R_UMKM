@@ -154,8 +154,9 @@ class StockTransferController extends Controller
     {
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'actor_user_id' => auth()->id(), 'action' => $action,
-            'subject_type' => 'stock_transfer', 'subject_id' => $transferId, 'occurred_at' => $now, 'created_at' => $now,
+            'subject_type' => 'stock_transfer', 'subject_id' => $transferId, 'occurred_at' => $now,
         ]);
+
     }
 
     private function find(string $tenantId, string $outletId, string $id): object

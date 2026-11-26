@@ -319,8 +319,9 @@ class PosController extends Controller
                     'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
                     'actor_user_id' => auth()->id(), 'action' => 'sale.completed', 'subject_type' => 'sale',
                     'subject_id' => $saleId, 'after' => json_encode(['sale_number' => $saleNumber, 'total' => $total]),
-                    'occurred_at' => $now, 'created_at' => $now,
+                    'occurred_at' => $now,
                 ]);
+
                 DB::table('outbox_messages')->insert([
                     'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'aggregate_type' => 'sale', 'aggregate_id' => $saleId,
                     'event_type' => 'sale.completed', 'payload' => json_encode(['sale_id' => $saleId, 'sale_number' => $saleNumber]),

@@ -64,7 +64,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/payment-gateway', [PaymentGatewayController::class, 'edit'])->middleware('role:owner')->name('payment-gateway.edit');
     Route::put('/payment-gateway', [PaymentGatewayController::class, 'update'])->middleware('role:owner')->name('payment-gateway.update');
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::post('/products/categories', [ProductController::class, 'storeCategory'])->middleware('role:owner,manager,warehouse')->name('products.categories.store');
     Route::post('/products', [ProductController::class, 'store'])->middleware('role:owner,manager,warehouse')->name('products.store');
+    Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
+    Route::patch('/products/{id}/status', [ProductController::class, 'toggleStatus'])->middleware('role:owner,manager')->name('products.status');
+    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware('role:owner')->name('products.destroy');
     Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->middleware('role:owner,manager')->name('products.edit');
     Route::middleware('role:owner,manager')->prefix('products/{id}')->name('products.')->group(function () {
         Route::get('/variants', [ProductVariantController::class, 'index'])->name('variants');
@@ -76,6 +80,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     });
     Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('role:owner,manager')->name('products.update');
     Route::post('/products/{id}/archive', [ProductController::class, 'archive'])->middleware('role:owner,manager')->name('products.archive');
+    Route::post('/products/{id}/restore', [ProductController::class, 'restore'])->middleware('role:owner,manager')->name('products.restore');
     Route::get('/staff', [StaffController::class, 'index'])->middleware('role:owner,manager')->name('staff.index');
     Route::post('/staff', [StaffController::class, 'store'])->middleware('role:owner')->name('staff.store');
     Route::put('/staff/{userId}', [StaffController::class, 'update'])->middleware('role:owner')->name('staff.update');

@@ -139,8 +139,9 @@ class ReportController extends Controller
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(),
                 'action' => $isCapital ? 'equity.capital_added' : 'equity.owner_draw', 'subject_type' => 'journal_entry', 'subject_id' => $entryId,
-                'after' => json_encode(['amount' => $amount, 'method' => $data['method']]), 'occurred_at' => $now, 'created_at' => $now,
+                'after' => json_encode(['amount' => $amount, 'method' => $data['method']]), 'occurred_at' => $now,
             ]);
+
         }, attempts: 3);
 
         return redirect()->route('reports.balance-sheet')->with('success', $data['kind'] === 'capital' ? 'Setoran modal dicatat.' : 'Prive dicatat.');

@@ -193,8 +193,9 @@ class JournalController extends Controller
         }
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'actor_user_id' => auth()->id(), 'action' => 'journal.'.$sourceType,
-            'subject_type' => 'journal_entry', 'subject_id' => $entryId, 'after' => json_encode(['entry_number' => $number]), 'occurred_at' => $now, 'created_at' => $now,
+            'subject_type' => 'journal_entry', 'subject_id' => $entryId, 'after' => json_encode(['entry_number' => $number]), 'occurred_at' => $now,
         ]);
+
 
         return $entryId;
     }

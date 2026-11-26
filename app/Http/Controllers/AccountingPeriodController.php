@@ -81,7 +81,8 @@ class AccountingPeriodController extends Controller
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'actor_user_id' => auth()->id(), 'action' => $action,
             'subject_type' => 'accounting_period', 'subject_id' => (string) Str::uuid(), 'after' => json_encode($after),
-            'occurred_at' => $now, 'created_at' => $now,
+            'occurred_at' => $now,
         ]);
+
     }
 }

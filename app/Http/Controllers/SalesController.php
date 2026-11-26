@@ -143,8 +143,9 @@ class SalesController extends Controller
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
                 'actor_user_id' => auth()->id(), 'action' => 'sale.voided', 'subject_type' => 'sale', 'subject_id' => $sale->id,
                 'before' => json_encode(['status' => 'completed']), 'after' => json_encode(['status' => 'voided', 'reason' => $data['reason']]),
-                'reason' => $data['reason'], 'occurred_at' => $now, 'created_at' => $now,
+                'reason' => $data['reason'], 'occurred_at' => $now,
             ]);
+
         }, attempts: 3);
 
         return redirect()->route('sales.show', $id)->with('success', 'Transaksi dibatalkan dan stok/jurnal sudah dibalik. Jika pembayaran digital sudah settlement, refund tetap perlu diproses di penyedia.');
@@ -215,8 +216,9 @@ class SalesController extends Controller
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id,
                 'actor_user_id' => auth()->id(), 'action' => 'sale.payment_received', 'subject_type' => 'sale',
                 'subject_id' => $sale->id, 'after' => json_encode(['amount' => $amount, 'payment_number' => $paymentNumber]),
-                'occurred_at' => $now, 'created_at' => $now,
+                'occurred_at' => $now,
             ]);
+
         }, attempts: 3);
 
         return redirect()->route('sales.show', $id)->with('success', 'Pembayaran pelanggan berhasil dicatat.');

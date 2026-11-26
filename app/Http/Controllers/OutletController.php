@@ -57,8 +57,9 @@ class OutletController extends Controller
             ]);
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outletId, 'actor_user_id' => auth()->id(), 'action' => 'outlet.created',
-                'subject_type' => 'outlet', 'subject_id' => $outletId, 'after' => json_encode(['name' => $data['name'], 'code' => $code]), 'occurred_at' => $now, 'created_at' => $now,
+                'subject_type' => 'outlet', 'subject_id' => $outletId, 'after' => json_encode(['name' => $data['name'], 'code' => $code]), 'occurred_at' => $now,
             ]);
+
         });
 
         return back()->with('success', 'Outlet ditambahkan. Mulai isi stoknya lewat transfer stok atau pembelian.');

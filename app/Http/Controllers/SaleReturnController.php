@@ -138,8 +138,9 @@ class SaleReturnController extends Controller
             DB::table('sales')->where('id', $sale->id)->update(['returned_total' => round((float) $sale->returned_total + $refundTotal, 2), 'updated_at' => $now]);
             DB::table('audit_logs')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'actor_user_id' => auth()->id(), 'action' => 'sale_return.created',
-                'subject_type' => 'sale', 'subject_id' => $sale->id, 'after' => json_encode(['return' => $number, 'refund_total' => $refundTotal]), 'occurred_at' => $now, 'created_at' => $now,
+                'subject_type' => 'sale', 'subject_id' => $sale->id, 'after' => json_encode(['return' => $number, 'refund_total' => $refundTotal]), 'occurred_at' => $now,
             ]);
+
 
             return $returnId;
         }, attempts: 3);

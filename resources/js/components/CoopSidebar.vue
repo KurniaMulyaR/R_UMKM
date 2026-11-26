@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import Icon from './Icon.vue';
 
 const props = defineProps({
@@ -18,8 +18,19 @@ const groups = computed(() => {
         if (!groupedLinks.has(link.group)) groupedLinks.set(link.group, []);
         groupedLinks.get(link.group).push(link);
     });
-    return [...groupedLinks].map(([name, links]) => ({ name, links }));
+    return [...groupedLinks].map(([name, links], index) => ({ name, links, id: `sidebar-nav-group-${index}` }));
 });
+const openGroup = ref('');
+const isCollapsed = ref(false);
+const isMobileNav = ref(false);
+
+function isGroupOpen(name) {
+    return (!isMobileNav.value && isCollapsed.value) || openGroup.value === name;
+}
+
+function toggleGroup(name) {
+    openGroup.value = openGroup.value === name ? '' : name;
+}
 
 function closeMenu() {
     document.body.classList.remove('menu-open');
@@ -30,15 +41,27 @@ function handleEscape(event) {
 }
 
 function toggleCollapsed() {
-    const collapsed = document.body.classList.toggle('nav-collapsed');
-    window.localStorage.setItem('rkasir-nav-collapsed', collapsed ? '1' : '0');
+    isCollapsed.value = !isCollapsed.value;
+    document.body.classList.toggle('nav-collapsed', isCollapsed.value && !isMobileNav.value);
+    window.localStorage.setItem('rkasir-nav-collapsed', isCollapsed.value ? '1' : '0');
+}
+
+function syncNavViewport() {
+    isMobileNav.value = window.matchMedia('(max-width: 880px)').matches;
+    document.body.classList.toggle('nav-collapsed', isCollapsed.value && !isMobileNav.value);
 }
 
 onMounted(() => {
-    if (window.localStorage.getItem('rkasir-nav-collapsed') === '1') document.body.classList.add('nav-collapsed');
+    isCollapsed.value = window.localStorage.getItem('rkasir-nav-collapsed') === '1';
+    syncNavViewport();
+    openGroup.value = props.links.find((link) => link.active)?.group ?? groups.value[0]?.name ?? '';
     window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', syncNavViewport);
 });
-onUnmounted(() => window.removeEventListener('keydown', handleEscape));
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleEscape);
+    window.removeEventListener('resize', syncNavViewport);
+});
 </script>
 
 <template>
@@ -48,7 +71,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape));
                 <span class="brand-mark"><span>R</span></span>
                 <span class="brand-copy"><b>R Kasir</b><small>Koperasi & usaha lokal</small></span>
             </a>
-            <button class="sidebar-collapse" type="button" aria-label="Ciutkan atau lebarkan navigasi" title="Ciutkan atau lebarkan navigasi" @click="toggleCollapsed"><Icon name="chevronLeft" /></button>
+            <button class="sidebar-collapse" :class="{ 'is-collapsed': isCollapsed }" type="button" :aria-label="isCollapsed ? 'Lebarkan menu' : 'Ciutkan menu'" :title="isCollapsed ? 'Lebarkan menu' : 'Ciutkan menu'" :aria-pressed="isCollapsed" @click="toggleCollapsed"><Icon name="chevronLeft" /></button>
         </div>
 
         <div class="store-switch">
@@ -57,9 +80,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape));
             <span class="chevron" aria-hidden="true"><Icon name="chevronDown" /></span>
         </div>
 
-        <div v-for="group in groups" :key="group.name" class="nav-group">
-            <div class="nav-label">{{ group.name }}</div>
-            <nav class="nav-list" :aria-label="group.name">
+        <div v-for="group in groups" :key="group.name" class="nav-group" :class="{ 'is-open': isGroupOpen(group.name) }">
+            <button class="nav-label nav-label-toggle" type="button" :aria-expanded="isGroupOpen(group.name)" :aria-controls="group.id" @click="toggleGroup(group.name)">
+                <span>{{ group.name }}</span><Icon class="group-chevron" name="chevronDown" />
+            </button>
+            <nav v-show="isGroupOpen(group.name)" :id="group.id" class="nav-list" :aria-label="group.name">
                 <a v-for="link in group.links" :key="link.label" :href="link.href" class="nav-link" :class="{ active: link.active }" :aria-current="link.active ? 'page' : undefined" :title="link.label" @click="closeMenu">
                     <span class="nav-icon" aria-hidden="true"><Icon :name="link.icon" /></span>
                     <span>{{ link.label }}</span>

@@ -424,7 +424,8 @@ class PurchasingController extends Controller
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'actor_user_id' => auth()->id(),
             'action' => $action, 'subject_type' => str_starts_with($action, 'supplier_bill') ? 'supplier_bill' : 'purchase_order',
-            'subject_id' => $subjectId, 'after' => json_encode($after), 'occurred_at' => $now, 'created_at' => $now,
+            'subject_id' => $subjectId, 'after' => json_encode($after), 'occurred_at' => $now,
         ]);
+
     }
 }

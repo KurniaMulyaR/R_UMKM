@@ -186,7 +186,8 @@ class ExpenseController extends Controller
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => $outletId, 'actor_user_id' => auth()->id(),
             'action' => $action, 'subject_type' => 'expense', 'subject_id' => $subjectId, 'after' => json_encode($after),
-            'reason' => $reason, 'occurred_at' => $now, 'created_at' => $now,
+            'reason' => $reason, 'occurred_at' => $now,
         ]);
+
     }
 }

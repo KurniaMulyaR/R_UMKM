@@ -52,8 +52,9 @@ class CustomerController extends Controller
         DB::table('audit_logs')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'outlet_id' => $request->attributes->get('outlet')->id ?? null, 'actor_user_id' => auth()->id(),
             'action' => 'customer.credit_limit_changed', 'subject_type' => 'customer', 'subject_id' => $id, 'after' => json_encode(['credit_limit' => $limit]),
-            'occurred_at' => now(), 'created_at' => now(),
+            'occurred_at' => now(),
         ]);
+
 
         return back()->with('success', 'Batas kredit diperbarui.');
     }
