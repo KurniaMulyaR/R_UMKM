@@ -13,7 +13,7 @@ class RecipeTest extends TestCase
     private function prepare(): void
     {
         $this->post('/setup', [
-            'owner_name' => 'Pemilik Uji', 'business_name' => 'Warung Uji', 'business_type' => 'fnb',
+            'owner_name' => 'Pemilik Uji', 'business_name' => 'Warung Uji', 'business_type' => 'food',
             'phone' => '081234567890', 'password' => 'rahasia123', 'password_confirmation' => 'rahasia123',
         ]);
         $this->post(route('shifts.open'), ['opening_cash' => 100000]);

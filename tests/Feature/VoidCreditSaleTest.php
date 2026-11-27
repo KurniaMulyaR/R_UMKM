@@ -51,11 +51,11 @@ class VoidCreditSaleTest extends TestCase
         $this->assertEquals(40000.0, $this->balance('1200'));
 
         $this->post(route('sales.payments.store', $sale->id), ['method' => 'cash', 'amount' => 15000])
-            ->assertRedirect(route('sales.show', $sale->id));
+            ->assertSessionHasNoErrors()->assertRedirect(route('sales.show', $sale->id));
         $this->assertEquals(25000.0, $this->balance('1200'));
         $this->assertEquals(15000.0, $this->balance('1010'));
 
-        $this->post(route('sales.void', $sale->id), [
+        $this->from(route('sales.show', $sale->id))->post(route('sales.void', $sale->id), [
             'reason' => 'Salah input barang', 'password' => 'rahasia123', 'confirm_void' => '1',
         ])->assertRedirect(route('sales.show', $sale->id));
 

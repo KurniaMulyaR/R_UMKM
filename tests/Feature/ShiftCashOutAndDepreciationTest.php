@@ -58,7 +58,7 @@ class ShiftCashOutAndDepreciationTest extends TestCase
         $this->setupOwner();
         $this->post(route('assets.store'), [
             'name' => 'Freezer', 'category' => 'equipment', 'purchase_date' => now()->startOfMonth()->subMonths(3)->toDateString(),
-            'purchase_cost' => 6000000, 'useful_life_months' => 60, 'salvage_value' => 0,
+            'purchase_cost' => 6000000, 'useful_life_months' => 60, 'salvage_value' => 0, 'funding' => 'none',
         ]);
 
         $this->post(route('assets.depreciation.store'), ['period' => now()->format('Y-m')])->assertRedirect();

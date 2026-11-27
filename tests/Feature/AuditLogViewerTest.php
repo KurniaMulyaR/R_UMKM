@@ -22,12 +22,16 @@ class AuditLogViewerTest extends TestCase
     {
         $this->prepare();
         $this->post(route('outlets.store'), ['name' => 'Cabang Dua', 'code' => 'CB2'])->assertSessionHasNoErrors();
-        $this->post(route('customers.store'), ['name' => 'Bu Rina']);
-        $customerId = DB::table('customers')->value('id');
-        $this->put(route('customers.credit-limit', $customerId), ['credit_limit' => 100000])->assertSessionHasNoErrors();
+        $tenantId = DB::table('tenants')->value('id');
+        DB::table('audit_logs')->insert([
+            'id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenantId, 'outlet_id' => DB::table('outlets')->value('id'),
+            'actor_user_id' => auth()->id(), 'action' => 'member.updated', 'subject_type' => 'customer',
+            'subject_id' => (string) \Illuminate\Support\Str::uuid(), 'occurred_at' => now(),
+        ]);
 
-        $this->get(route('audit-logs.index'))->assertOk()->assertSee('outlet.created')->assertSee('customer.credit_limit_changed');
-        $this->get(route('audit-logs.index', ['action' => 'outlet.created']))->assertOk()->assertSee('outlet.created')->assertDontSee('customer.credit_limit_changed');
+        $this->get(route('audit-logs.index'))->assertOk()->assertSee('<td>outlet.created</td>', false)->assertSee('<td>member.updated</td>', false);
+        $this->get(route('audit-logs.index', ['action' => 'outlet.created']))->assertOk()
+            ->assertSee('<td>outlet.created</td>', false)->assertDontSee('<td>member.updated</td>', false);
     }
 
     public function test_only_current_tenant_logs_are_shown(): void

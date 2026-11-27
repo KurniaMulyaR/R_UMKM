@@ -49,8 +49,14 @@ class JournalLedgerTest extends TestCase
     public function test_csv_import_is_all_or_nothing_and_idempotent(): void
     {
         $this->setupOwner();
-        $good = "tanggal,nomor_jurnal,keterangan,kode_akun,debit,kredit,memo\n".now()->toDateString().",A1,Saldo awal,1010,5000000,0,\n".now()->toDateString().",A1,Saldo awal,3010,0,5000000,\n";
-        $bad = $good.now()->toDateString().",B1,Salah,1010,100,0,\n".now()->toDateString().",B1,Salah,3010,0,50,\n";
+        $tenantId = DB::table('tenants')->value('id');
+        DB::table('chart_of_accounts')->insert([
+            'id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenantId, 'code' => '3900', 'name' => 'Saldo Awal Manual',
+            'account_type' => 'equity', 'normal_balance' => 'credit', 'is_system' => false, 'allow_manual_posting' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $good = "tanggal,nomor_jurnal,keterangan,kode_akun,debit,kredit,memo\n".now()->toDateString().",A1,Saldo awal,1010,5000000,0,\n".now()->toDateString().",A1,Saldo awal,3900,0,5000000,\n";
+        $bad = $good.now()->toDateString().",B1,Salah,1010,100,0,\n".now()->toDateString().",B1,Salah,3900,0,50,\n";
 
         $this->post(route('journals.import.store'), ['file' => UploadedFile::fake()->createWithContent('j.csv', $bad)])->assertSessionHasErrors('file');
         $this->assertSame(0, DB::table('journal_entries')->where('source_type', 'manual_import')->count());

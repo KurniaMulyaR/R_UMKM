@@ -85,9 +85,11 @@ class CashFlowController extends Controller
             ->selectRaw('chart_of_accounts.code as code, chart_of_accounts.name as name, SUM(journal_lines.debit - journal_lines.credit) as balance')->get()->keyBy('code');
         $opening = $balanceBefore($from, '<');
         $closing = $balanceBefore($to, '<=');
+        $accountNames = DB::table('chart_of_accounts')->where('tenant_id', $tenantId)
+            ->whereIn('code', self::CASH_CODES)->pluck('name', 'code');
         $byAccount = [];
         foreach (self::CASH_CODES as $code) {
-            $label = ($closing[$code] ?? $opening[$code] ?? null)?->name ?? $code;
+            $label = ($closing[$code] ?? $opening[$code] ?? null)?->name ?? $accountNames[$code] ?? $code;
             $byAccount[] = ['name' => $code.' · '.$label, 'opening' => round((float) ($opening[$code]->balance ?? 0), 2), 'closing' => round((float) ($closing[$code]->balance ?? 0), 2)];
         }
 

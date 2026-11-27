@@ -42,6 +42,7 @@ class ThermalReceiptTest extends TestCase
         $sale = DB::table('sales')->first();
         $page = $this->get(route('documents.thermal', ['id' => $saleId, 'auto' => 1]))->assertOk();
         $page->assertSee($sale->sale_number)->assertSee('TOTAL')->assertSee('window.print()', false)->assertSee('Warung Uji');
+        $page->assertSee('Tgl : '.\Illuminate\Support\Carbon::parse($sale->sold_at, 'Asia/Jakarta')->format('d/m/Y H:i'));
         $page->assertSee('size: 80mm auto', false);
         $this->get(route('documents.thermal', ['id' => $saleId, 'w' => 58]))->assertOk()->assertSee('size: 58mm auto', false)->assertDontSee('window.print(); });', false);
     }

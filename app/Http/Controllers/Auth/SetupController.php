@@ -43,7 +43,7 @@ class SetupController extends Controller
         $user = DB::transaction(function () use ($data) {
             $user = User::create([
                 'name' => $data['owner_name'], 'phone' => $data['phone'],
-                'email' => $data['email'] ?: null, 'password' => $data['password'],
+                'email' => ($data['email'] ?? null) ?: null, 'password' => $data['password'],
             ]);
             $tenantId = (string) Str::uuid();
             $outletId = (string) Str::uuid();

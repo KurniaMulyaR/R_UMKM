@@ -15,16 +15,19 @@ class PurchasingController extends Controller
     public function suppliers(Request $request): View
     {
         $tenant = $request->attributes->get('tenant');
-        $suppliers = DB::table('suppliers')->leftJoin('supplier_bills', function ($join) {
+        $showDeleted = $request->boolean('show_deleted');
+        $query = DB::table('suppliers')->leftJoin('supplier_bills', function ($join) {
             $join->on('supplier_bills.supplier_id', '=', 'suppliers.id')->whereIn('supplier_bills.status', ['open', 'partial']);
-        })->where('suppliers.tenant_id', $tenant->id)->whereNull('suppliers.deleted_at')
-            ->groupBy('suppliers.id', 'suppliers.name', 'suppliers.contact_name', 'suppliers.phone', 'suppliers.payment_terms_days')
+        })->where('suppliers.tenant_id', $tenant->id);
+        $showDeleted ? $query->whereNotNull('suppliers.deleted_at') : $query->whereNull('suppliers.deleted_at');
+        $suppliers = $query->groupBy('suppliers.id', 'suppliers.name', 'suppliers.contact_name', 'suppliers.phone', 'suppliers.payment_terms_days', 'suppliers.is_active', 'suppliers.deleted_at')
             ->orderBy('suppliers.name')
-            ->select('suppliers.id', 'suppliers.name', 'suppliers.contact_name', 'suppliers.phone', 'suppliers.payment_terms_days',
+            ->select('suppliers.id', 'suppliers.name', 'suppliers.contact_name', 'suppliers.phone', 'suppliers.email', 'suppliers.address', 'suppliers.notes', 'suppliers.payment_terms_days', 'suppliers.is_active', 'suppliers.deleted_at',
                 DB::raw('COALESCE(SUM(supplier_bills.balance_due), 0) as payable'))
             ->paginate(20);
+        $deletedCount = DB::table('suppliers')->where('tenant_id', $tenant->id)->whereNotNull('deleted_at')->count();
 
-        return view('purchasing.suppliers', compact('suppliers'));
+        return view('purchasing.suppliers', compact('suppliers', 'showDeleted', 'deletedCount'));
     }
 
     public function storeSupplier(Request $request): RedirectResponse
@@ -43,6 +46,58 @@ class PurchasingController extends Controller
         ]);
 
         return back()->with('success', 'Supplier berhasil ditambahkan.');
+    }
+
+    public function updateSupplier(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'], 'contact_name' => ['nullable', 'string', 'max:160'],
+            'phone' => ['nullable', 'string', 'max:32'], 'email' => ['nullable', 'email', 'max:190'],
+            'address' => ['nullable', 'string', 'max:1000'], 'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $exists = DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->exists();
+        abort_unless($exists, 404);
+        DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->update([
+            'name' => $data['name'], 'contact_name' => $data['contact_name'] ?? null, 'phone' => $data['phone'] ?? null,
+            'email' => $data['email'] ?? null, 'address' => $data['address'] ?? null,
+            'payment_terms_days' => $data['payment_terms_days'] ?? null, 'notes' => $data['notes'] ?? null, 'updated_at' => now(),
+        ]);
+        return back()->with('success', 'Data supplier berhasil diperbarui.');
+    }
+
+    public function toggleSupplierStatus(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $supplier = DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->first();
+        abort_unless($supplier, 404);
+        $active = ! (bool) $supplier->is_active;
+        DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->update(['is_active' => $active, 'updated_at' => now()]);
+
+        return back()->with('success', $active ? 'Supplier diaktifkan.' : 'Supplier dinonaktifkan.');
+    }
+
+    public function deleteSupplier(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $deleted = DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNull('deleted_at')->update([
+            'is_active' => false, 'deleted_at' => now(), 'updated_at' => now(),
+        ]);
+        abort_unless($deleted, 404);
+
+        return back()->with('success', 'Supplier dihapus dari daftar aktif. Riwayat pembelian dan hutang tetap tersimpan.');
+    }
+
+    public function restoreSupplier(Request $request, string $id): RedirectResponse
+    {
+        $tenant = $request->attributes->get('tenant');
+        $restored = DB::table('suppliers')->where('tenant_id', $tenant->id)->where('id', $id)->whereNotNull('deleted_at')->update([
+            'is_active' => false, 'deleted_at' => null, 'updated_at' => now(),
+        ]);
+        abort_unless($restored, 404);
+
+        return back()->with('success', 'Supplier dipulihkan dalam status nonaktif.');
     }
 
     public function index(Request $request): View

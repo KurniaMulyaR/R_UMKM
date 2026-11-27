@@ -133,6 +133,10 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:owner,manager,warehouse')->prefix('purchasing')->name('purchasing.')->group(function () {
         Route::get('/suppliers', [PurchasingController::class, 'suppliers'])->name('suppliers');
         Route::post('/suppliers', [PurchasingController::class, 'storeSupplier'])->name('suppliers.store');
+        Route::put('/suppliers/{id}', [PurchasingController::class, 'updateSupplier'])->name('suppliers.update');
+        Route::patch('/suppliers/{id}/status', [PurchasingController::class, 'toggleSupplierStatus'])->name('suppliers.status');
+        Route::delete('/suppliers/{id}', [PurchasingController::class, 'deleteSupplier'])->name('suppliers.destroy');
+        Route::post('/suppliers/{id}/restore', [PurchasingController::class, 'restoreSupplier'])->name('suppliers.restore');
         Route::get('/orders', [PurchasingController::class, 'index'])->name('index');
         Route::get('/orders/create', [PurchasingController::class, 'create'])->name('create');
         Route::post('/orders', [PurchasingController::class, 'store'])->name('store');

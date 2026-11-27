@@ -25,7 +25,7 @@
     @if($outlet->phone ?: $tenant->phone)<div class="c">Telp {{ $outlet->phone ?: $tenant->phone }}</div>@endif
     <hr>
     <div>No  : {{ $sale->sale_number }}</div>
-    <div>Tgl : {{ \Illuminate\Support\Carbon::parse($sale->sold_at)->timezone($tenant->timezone)->format('d/m/Y H:i') }}</div>
+    <div>Tgl : {{ \Illuminate\Support\Carbon::parse($sale->sold_at, $tenant->timezone)->format('d/m/Y H:i') }}</div>
     <div>Kasir: {{ $cashier }}</div>
     @if($sale->customer_name)<div>Pelanggan: {{ $sale->customer_name }}</div>@endif
     <hr>

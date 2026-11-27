@@ -246,8 +246,8 @@ class AssetController extends Controller
                 $monthly = round($depreciable / max(1, (int) $asset->useful_life_months), 2);
                 $postedTotal = (float) DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->sum('amount');
                 $postedPeriods = DB::table('asset_depreciation_entries')->where('business_asset_id', $asset->id)->pluck('period')->all();
-                $cursor = Carbon::parse($asset->purchase_date)->startOfMonth()->addMonth();
-                $last = $asset->disposed_at ? Carbon::parse($asset->disposed_at)->startOfMonth() : $target->copy();
+                $cursor = Carbon::parse($asset->purchase_date, $tenant->timezone)->startOfMonth()->addMonth();
+                $last = $asset->disposed_at ? Carbon::parse($asset->disposed_at, $tenant->timezone)->startOfMonth() : $target->copy();
                 $last = $last->min($target);
                 for (; $cursor->lte($last); $cursor->addMonth()) {
                     $period = $cursor->format('Y-m');
@@ -348,8 +348,8 @@ class AssetController extends Controller
      */
     private function present(object $asset, Carbon $today): object
     {
-        $purchased = Carbon::parse($asset->purchase_date)->startOfDay();
-        $end = $asset->disposed_at ? Carbon::parse($asset->disposed_at)->startOfDay() : $today;
+        $purchased = Carbon::parse($asset->purchase_date, $today->timezone)->startOfDay();
+        $end = $asset->disposed_at ? Carbon::parse($asset->disposed_at, $today->timezone)->startOfDay() : $today;
         $months = max(0, (int) $purchased->diffInMonths($end));
         $depreciable = max(0.0, (float) $asset->purchase_cost - (float) $asset->salvage_value);
         $ratio = min(1.0, $months / max(1, (int) $asset->useful_life_months));
@@ -360,7 +360,7 @@ class AssetController extends Controller
         $asset->life_used_percent = (int) round($ratio * 100);
         $asset->maintenance_state = 'ok';
         if ($asset->status !== 'disposed' && $asset->next_maintenance_due) {
-            $due = Carbon::parse($asset->next_maintenance_due)->startOfDay();
+            $due = Carbon::parse($asset->next_maintenance_due, $today->timezone)->startOfDay();
             $asset->maintenance_state = $due->lt($today) ? 'overdue' : ($due->lte($today->copy()->addDays(14)) ? 'soon' : 'ok');
         }
 

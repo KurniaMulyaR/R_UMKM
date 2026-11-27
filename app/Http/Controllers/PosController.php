@@ -35,7 +35,7 @@ class PosController extends Controller
             ->whereNull('products.deleted_at')->select('product_variants.id as variant_id', 'products.id as product_id', 'products.name', 'products.sku',
                 'products.track_stock', 'products.base_unit_id', 'product_variants.name as variant_name', 'units.symbol as unit_symbol', 'product_categories.name as category_name', 'product_variants.cost_price')->orderBy('products.name')->orderBy('product_variants.created_at')->get();
         $variantIds = $variants->pluck('variant_id')->all();
-        $now = now();
+        $now = now($tenant->timezone);
         $prices = DB::table('product_prices')->where('tenant_id', $tenant->id)->whereIn('product_variant_id', $variantIds)
             ->where('price_type', 'retail')->where('is_active', true)
             ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $now))
@@ -245,9 +245,10 @@ class PosController extends Controller
                         if (! $conversion) throw ValidationException::withMessages(['items' => 'Satuan jual '.$row->product_name.' tidak valid. Muat ulang kasir.']);
                         $factor = (float) $conversion->base_quantity; $unitSymbol = $conversion->symbol;
                     }
+                    $pricingDate = now($tenant->timezone);
                     $price = DB::table('product_prices')->where('tenant_id', $tenant->id)->where('product_variant_id', $row->id)->where('unit_id', $sellUnitId)->where('price_type', 'retail')->where('is_active', true)
-                        ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', now()))
-                        ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', now()))
+                        ->where(fn ($q) => $q->whereNull('valid_from')->orWhere('valid_from', '<=', $pricingDate))
+                        ->where(fn ($q) => $q->whereNull('valid_until')->orWhere('valid_until', '>=', $pricingDate))
                         ->where(fn ($q) => $q->whereNull('outlet_id')->orWhere('outlet_id', $outlet->id))
                         ->orderByRaw('outlet_id = ? desc', [$outlet->id])->first();
                     if (! $price) throw ValidationException::withMessages(['items' => 'Harga produk '.$row->product_name.' belum tersedia.']);

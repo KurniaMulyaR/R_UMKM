@@ -11,7 +11,7 @@ class XenditQrisTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function prepare(): array
+    private function prepare(bool $fakeSuccessfulGatewayResponse = true): array
     {
         $this->post('/setup', [
             'owner_name' => 'Pemilik Uji', 'business_name' => 'Warung Uji', 'business_type' => 'grocery',
@@ -20,7 +20,9 @@ class XenditQrisTest extends TestCase
         $this->put(route('payment-gateway.update'), ['secret_key' => 'xnd_development_test', 'callback_token' => 'tok-123', 'is_active' => 1])->assertSessionHasNoErrors();
         $this->post(route('products.store'), ['name' => 'Teh', 'unit_id' => DB::table('units')->value('id'), 'price' => 5000, 'cost_price' => 3000, 'initial_stock' => 10]);
         $this->post(route('shifts.open'), ['opening_cash' => 100000]);
-        Http::fake(['api.xendit.co/qr_codes' => Http::response(['qr_id' => 'qr_1', 'qr_string' => '000201010212-test', 'status' => 'ACTIVE'], 200)]);
+        if ($fakeSuccessfulGatewayResponse) {
+            Http::fake(['api.xendit.co/qr_codes' => Http::response(['qr_id' => 'qr_1', 'qr_string' => '000201010212-test', 'status' => 'ACTIVE'], 200)]);
+        }
 
         return [DB::table('product_variants')->value('id'), DB::table('tenants')->value('id')];
     }
@@ -92,7 +94,7 @@ class XenditQrisTest extends TestCase
 
     public function test_xendit_failure_creates_no_charge(): void
     {
-        [$variantId] = $this->prepare();
+        [$variantId] = $this->prepare(false);
         Http::fake(['api.xendit.co/qr_codes' => Http::response(['message' => 'forbidden'], 403)]);
         $this->postJson(route('pos.qris.store'), [
             'items' => [['variant_id' => $variantId, 'quantity' => 1]], 'payments' => [['method' => 'qris_xendit', 'amount' => 5000]],

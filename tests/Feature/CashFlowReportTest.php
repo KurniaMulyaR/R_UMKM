@@ -38,6 +38,7 @@ class CashFlowReportTest extends TestCase
         $this->assertEquals(1000000.0, $report['totals']['financing']);
         $this->assertEquals(25000.0, $report['totals']['operating']);
         $this->assertEquals(0.0, $report['totals']['investing']);
+        $this->assertContains('1030 · Saldo QRIS / Gateway', array_column($report['byAccount'], 'name'));
         $this->assertEquals(1025000.0, $report['net']);
         $this->assertEquals(0.0, $report['opening']);
         $this->assertEquals($report['opening'] + $report['net'], $report['closing']);

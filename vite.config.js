@@ -4,6 +4,13 @@ import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+    build: {
+        rolldownOptions: {
+            checks: {
+                bundlerTimings: false,
+            },
+        },
+    },
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],

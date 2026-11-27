@@ -18,7 +18,7 @@ class AssetTest extends TestCase
         ]);
         $this->post(route('assets.store'), [
             'name' => 'Freezer 2 Pintu', 'category' => 'equipment', 'purchase_date' => now()->subMonths(12)->toDateString(),
-            'purchase_cost' => 6000000, 'useful_life_months' => 60, 'salvage_value' => 0, 'maintenance_interval_days' => 90,
+            'purchase_cost' => 6000000, 'useful_life_months' => 60, 'salvage_value' => 0, 'maintenance_interval_days' => 90, 'funding' => 'none',
         ])->assertRedirect(route('assets.index'));
 
         return DB::table('business_assets')->first();

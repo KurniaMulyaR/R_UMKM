@@ -14,6 +14,10 @@ class PlatformPanelTest extends TestCase
 
     private function registerTenant(string $business, string $phone): string
     {
+        if (DB::table('users')->exists()) {
+            return $this->registerAdditionalTenant($business, $phone);
+        }
+
         $this->post('/setup', [
             'owner_name' => 'Pemilik '.$business, 'business_name' => $business, 'business_type' => 'grocery',
             'phone' => $phone, 'password' => 'rahasia123', 'password_confirmation' => 'rahasia123',
@@ -21,6 +25,48 @@ class PlatformPanelTest extends TestCase
         $this->post('/logout');
 
         return (string) DB::table('tenants')->where('name', $business)->value('id');
+    }
+
+    private function registerAdditionalTenant(string $business, string $phone): string
+    {
+        $now = now();
+        $userId = (string) Str::uuid();
+        $tenantId = (string) Str::uuid();
+        $outletId = (string) Str::uuid();
+        $membershipId = (string) Str::uuid();
+        $roleId = (string) Str::uuid();
+
+        DB::table('users')->insert([
+            'id' => $userId, 'name' => 'Pemilik '.$business, 'phone' => $phone,
+            'password' => Hash::make('rahasia123'), 'status' => 'active', 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('tenants')->insert([
+            'id' => $tenantId, 'name' => $business, 'slug' => Str::slug($business).'-'.Str::lower(Str::random(5)),
+            'business_type' => 'grocery', 'timezone' => 'Asia/Jakarta', 'currency' => 'IDR', 'status' => 'active',
+            'created_by_user_id' => $userId, 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('outlets')->insert([
+            'id' => $outletId, 'tenant_id' => $tenantId, 'name' => $business, 'code' => 'UTAMA',
+            'timezone' => 'Asia/Jakarta', 'is_default' => true, 'status' => 'active', 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('tenant_user')->insert([
+            'id' => $membershipId, 'tenant_id' => $tenantId, 'user_id' => $userId, 'status' => 'active',
+            'joined_at' => $now, 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('roles')->insert([
+            'id' => $roleId, 'tenant_id' => $tenantId, 'name' => 'Pemilik', 'key' => 'owner', 'is_system' => true,
+            'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('tenant_user_roles')->insert([
+            'id' => (string) Str::uuid(), 'tenant_user_id' => $membershipId, 'role_id' => $roleId,
+            'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('user_outlet')->insert([
+            'id' => (string) Str::uuid(), 'tenant_user_id' => $membershipId, 'outlet_id' => $outletId,
+            'is_default' => true, 'status' => 'active', 'created_at' => $now, 'updated_at' => $now,
+        ]);
+
+        return $tenantId;
     }
 
     private function actAsPlatformAdmin(): string

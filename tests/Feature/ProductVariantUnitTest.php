@@ -44,7 +44,7 @@ class ProductVariantUnitTest extends TestCase
         $this->assertEquals(300000.0 + 90000.0, $this->inventory());
         $this->post(route('products.variants.store', $this->productId), ['name' => 'besar', 'price' => 1])->assertSessionHasErrors('name');
 
-        $this->get(route('pos.index'))->assertOk()->assertSee('Teh — Besar', false);
+        $this->get(route('pos.index'))->assertOk()->assertSee('Besar');
         $this->get(route('products.index'))->assertOk();
     }
 

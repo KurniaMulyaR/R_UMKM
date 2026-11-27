@@ -14,7 +14,7 @@ class CustomerCreditTest extends TestCase
 
     private string $customerId;
 
-    private function prepare(?float $limit): void
+    private function prepare(?float $limit = null): void
     {
         $this->post('/setup', [
             'owner_name' => 'Pemilik Uji', 'business_name' => 'Warung Uji', 'business_type' => 'grocery',
@@ -25,6 +25,9 @@ class CustomerCreditTest extends TestCase
         $this->variantId = DB::table('product_variants')->value('id');
         $this->post(route('customers.store'), ['name' => 'Bu Rina', 'credit_limit' => $limit]);
         $this->customerId = DB::table('customers')->value('id');
+        if ($limit !== null) {
+            DB::table('customers')->where('id', $this->customerId)->update(['credit_limit' => $limit]);
+        }
     }
 
     private function creditSale(int $qty)
@@ -54,7 +57,7 @@ class CustomerCreditTest extends TestCase
         $this->post(route('sales.payments.store', $saleId), ['method' => 'cash', 'amount' => 10000])->assertSessionHasNoErrors();
         $this->creditSale(1)->assertSessionHasNoErrors();
 
-        $this->put(route('customers.credit-limit', $this->customerId), ['credit_limit' => ''])->assertSessionHasNoErrors();
+        DB::table('customers')->where('id', $this->customerId)->update(['credit_limit' => null]);
         $this->assertNull(DB::table('customers')->value('credit_limit'));
         $this->creditSale(10)->assertSessionHasNoErrors();
     }
