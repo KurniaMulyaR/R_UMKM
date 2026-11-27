@@ -45,6 +45,12 @@
         }
         $sidebarLinks[] = ['group' => 'LAPORAN', 'label' => 'Laba rugi', 'href' => route('reports.profit-loss'), 'icon' => 'sales', 'active' => request()->routeIs('reports.profit-loss')];
     }
+    if (in_array($currentRole->key ?? '', ['owner', 'manager'], true)) {
+        $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Bantuan', 'href' => route('support.index'), 'icon' => 'check', 'active' => request()->routeIs('support.*')];
+    }
+    if (auth()->user() && \Illuminate\Support\Facades\DB::table('users')->where('id', auth()->id())->where('is_platform_admin', true)->exists()) {
+        $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Panel master', 'href' => route('platform.dashboard'), 'icon' => 'grid', 'active' => false];
+    }
     $sidebarLinks[] = ['group' => 'PETA PRODUK', 'label' => 'Fitur dalam PRD', 'href' => route('features.index'), 'icon' => 'grid', 'active' => request()->routeIs('features.*')];
     $ui = [
         'sidebar' => [

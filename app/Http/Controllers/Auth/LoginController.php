@@ -27,6 +27,11 @@ class LoginController extends Controller
         }
         $request->session()->regenerate();
         DB::table('users')->where('id', Auth::id())->update(['last_login_at' => now(), 'updated_at' => now()]);
+        $isPlatformAdmin = DB::table('users')->where('id', Auth::id())->where('is_platform_admin', true)->exists();
+        if ($isPlatformAdmin && ! DB::table('tenant_user')->where('user_id', Auth::id())->where('status', 'active')->exists()) {
+            return redirect()->route('platform.dashboard');
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

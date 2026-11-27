@@ -58,7 +58,7 @@ class FeatureHubController extends Controller
                     ['name' => 'Komunitas pengguna', 'status' => 'Belum dibangun', 'summary' => 'Forum berbagi ilmu memakai sistem, sumber belajar, moderasi, dan pelaporan konten.'],
                     ['name' => 'Campaign UMKM terbaik', 'status' => 'Belum dibangun', 'summary' => 'Seleksi usaha berpenghasilan baik dengan persetujuan pemilik, lalu kampanye profil dan cerita sukses.'],
                     ['name' => 'AI untuk audit & draf', 'status' => 'Belum dibangun', 'summary' => 'Analisis anomali dan pembuatan draf yang tetap memerlukan persetujuan manusia.'],
-                    ['name' => 'Panel master pemilik platform', 'status' => 'Belum dibangun', 'summary' => 'Kontrol seluruh UMKM terdaftar: grafik pertumbuhan, langganan, feature access, support, dan log aktivitas.'],
+                    ['name' => 'Panel master pemilik platform', 'status' => 'Sebagian', 'summary' => 'Daftar usaha, paket, tangguhkan/aktifkan dengan alasan tercatat, tiket dukungan, dan log aksi platform (akses via php artisan platform:admin). Belum ada: login-sebagai, health score, biaya variabel, feature flag per usaha, kampanye.'],
                 ],
             ],
         ];

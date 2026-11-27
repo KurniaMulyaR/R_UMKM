@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\AssetController;
+use App\Http\Controllers\PlatformController;
+use App\Http\Controllers\PlatformTicketController;
+use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\RecipeController;
@@ -55,6 +58,20 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:8,1')->name('login.store');
 });
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+
+Route::middleware(['auth', 'platform'])->prefix('platform')->name('platform.')->group(function () {
+    Route::get('/', [PlatformController::class, 'dashboard'])->name('dashboard');
+    Route::get('/tenants', [PlatformController::class, 'tenants'])->name('tenants');
+    Route::get('/tenants/{tenantId}', [PlatformController::class, 'show'])->name('tenants.show');
+    Route::post('/tenants/{tenantId}/plan', [PlatformController::class, 'updatePlan'])->name('tenants.plan');
+    Route::post('/tenants/{tenantId}/suspend', [PlatformController::class, 'suspend'])->name('tenants.suspend');
+    Route::post('/tenants/{tenantId}/activate', [PlatformController::class, 'activate'])->name('tenants.activate');
+    Route::get('/logs', [PlatformController::class, 'logs'])->name('logs');
+    Route::get('/tickets', [PlatformTicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/{ticketId}', [PlatformTicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets/{ticketId}/reply', [PlatformTicketController::class, 'reply'])->name('tickets.reply');
+    Route::post('/tickets/{ticketId}/status', [PlatformTicketController::class, 'setStatus'])->name('tickets.status');
+});
 
 Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
@@ -174,6 +191,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/reports/ppn', [VatReportController::class, 'index'])->middleware('role:owner,manager')->name('reports.ppn');
     Route::post('/reports/ppn/pay', [VatReportController::class, 'pay'])->middleware('role:owner')->name('reports.ppn.pay');
     Route::get('/reports/cash-flow', [CashFlowController::class, 'index'])->middleware('role:owner,manager')->name('reports.cash-flow');
+    Route::middleware('role:owner,manager')->prefix('support')->name('support.')->group(function () {
+        Route::get('/', [SupportTicketController::class, 'index'])->name('index');
+        Route::post('/', [SupportTicketController::class, 'store'])->name('store');
+        Route::get('/{ticketId}', [SupportTicketController::class, 'show'])->name('show');
+        Route::post('/{ticketId}/reply', [SupportTicketController::class, 'reply'])->name('reply');
+    });
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:owner')->name('audit-logs.index');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->middleware('role:owner,manager')->name('reports.profit-loss');
     Route::middleware('role:owner,manager')->prefix('expenses')->name('expenses.')->group(function () {
