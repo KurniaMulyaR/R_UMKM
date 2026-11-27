@@ -107,6 +107,7 @@ class PosController extends Controller
     {
         $tenant = $request->attributes->get('tenant'); $outlet = $request->attributes->get('outlet');
         $data = $request->validate([
+            'client_transaction_id' => ['nullable', 'uuid'],
             'customer_id' => ['nullable', 'uuid'], 'discount' => ['nullable', 'numeric', 'min:0'],
             'cash_received' => ['nullable', 'numeric', 'min:0'], 'notes' => ['nullable', 'string', 'max:1000'],
             'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
@@ -117,6 +118,19 @@ class PosController extends Controller
             'payments.*.amount' => ['required', 'numeric', 'gt:0'],
         ]);
         $data['items'] = self::normalizeItems($data['items']);
+        $data['client_transaction_id'] = $data['client_transaction_id'] ?? (string) Str::uuid();
+
+        // A retry after a lost response must return the first sale without trying
+        // to consume stock, cash, or a one-time payment proof again.
+        $existingSale = DB::table('sales')->where('tenant_id', $tenant->id)
+            ->where('client_transaction_id', $data['client_transaction_id'])->first();
+        if ($existingSale) {
+            if ($request->expectsJson()) {
+                return response()->json(['receipt' => $this->receiptPayload($tenant, $outlet, $existingSale->id)], 200);
+            }
+
+            return redirect()->route('sales.show', $existingSale->id)->with('success', 'Transaksi ini sudah berhasil disimpan.');
+        }
 
         if (! empty($data['customer_id'])) abort_unless(DB::table('customers')->where('tenant_id', $tenant->id)->where('id', $data['customer_id'])->where('is_active', true)->exists(), 404);
         if (collect($data['payments'])->contains(fn ($payment) => $payment['method'] === 'credit') && empty($data['customer_id'])) {
@@ -209,11 +223,23 @@ class PosController extends Controller
      */
     public function processCheckout(object $tenant, object $outlet, array $data, float $cashApplied, ?string $chargeId = null, bool $allowPriceOverride = false): string
     {
+        $data['client_transaction_id'] ??= (string) Str::uuid();
+
         try {
             $saleId = DB::transaction(function () use ($data, $tenant, $outlet, $cashApplied, $chargeId, $allowPriceOverride) {
+                $existingSaleId = DB::table('sales')->where('tenant_id', $tenant->id)
+                    ->where('client_transaction_id', $data['client_transaction_id'])->value('id');
+                if ($existingSaleId) return $existingSaleId;
+
                 $shift = DB::table('cash_shifts')->where('tenant_id', $tenant->id)->where('outlet_id', $outlet->id)
                     ->where('cashier_user_id', auth()->id())->where('status', 'open')->lockForUpdate()->first();
                 if (! $shift) throw ValidationException::withMessages(['shift' => 'Buka shift sebelum memulai transaksi.']);
+
+                // Serialize identical submissions on the cashier's open shift,
+                // then recheck after acquiring the lock to close the race window.
+                $existingSaleId = DB::table('sales')->where('tenant_id', $tenant->id)
+                    ->where('client_transaction_id', $data['client_transaction_id'])->value('id');
+                if ($existingSaleId) return $existingSaleId;
 
                 $charge = null;
                 if ($chargeId) {
@@ -314,7 +340,7 @@ class PosController extends Controller
                 DB::table('sales')->insert([
                     'id' => $saleId, 'tenant_id' => $tenant->id, 'outlet_id' => $outlet->id, 'cash_shift_id' => $shift->id,
                     'customer_id' => $data['customer_id'] ?? null, 'cashier_user_id' => auth()->id(), 'sale_number' => $saleNumber,
-                    'client_transaction_id' => (string) Str::uuid(), 'status' => 'completed', 'channel' => 'pos', 'sold_at' => $now,
+                    'client_transaction_id' => $data['client_transaction_id'], 'status' => 'completed', 'channel' => 'pos', 'sold_at' => $now,
                     'currency' => $tenant->currency, 'subtotal' => $subtotal, 'discount_total' => $discount, 'fee_total' => 0,
                     'tax_total' => $taxTotal, 'tax_mode' => $taxTotal > 0 ? $taxSettings['mode'] : null, 'tax_rate' => $taxTotal > 0 ? $taxSettings['rate'] : null, 'grand_total' => $total, 'paid_total' => $paidTotal,
                     'change_total' => max(0, $cashReceived - $cashApplied), 'notes' => $data['notes'] ?? null,
@@ -469,6 +495,12 @@ class PosController extends Controller
                 return $saleId;
             }, attempts: 3);
         } catch (QueryException $exception) {
+            // A parallel retry can pass both reads before either request inserts.
+            // The unique index is the final arbiter; return its committed sale.
+            $existingSaleId = DB::table('sales')->where('tenant_id', $tenant->id)
+                ->where('client_transaction_id', $data['client_transaction_id'])->value('id');
+            if ($existingSaleId) return $existingSaleId;
+
             report($exception);
             throw $exception;
         }

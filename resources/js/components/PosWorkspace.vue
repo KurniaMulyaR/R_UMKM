@@ -30,6 +30,26 @@ const customerId = ref(props.initialCustomerId);
 const cashReceived = ref(0);
 const notes = ref(props.initialNotes);
 const payments = ref([{ method: 'cash', amount: 0 }]);
+const checkoutIdStorageKey = 'rk_pending_checkout_id';
+function newCheckoutId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+        const value = Math.floor(Math.random() * 16);
+        return (char === 'x' ? value : (value & 0x3) | 0x8).toString(16);
+    });
+}
+function loadCheckoutId() {
+    try {
+        const saved = window.localStorage.getItem(checkoutIdStorageKey);
+        if (saved) return saved;
+        const created = newCheckoutId();
+        window.localStorage.setItem(checkoutIdStorageKey, created);
+        return created;
+    } catch (error) {
+        return newCheckoutId();
+    }
+}
+const clientTransactionId = ref(loadCheckoutId());
 const message = ref('');
 const searchInput = ref(null);
 const checkoutForm = ref(null);
@@ -212,6 +232,12 @@ async function submitCheckout(form) {
         }
 
         receipt.value = data.receipt;
+        clientTransactionId.value = newCheckoutId();
+        try {
+            window.localStorage.setItem(checkoutIdStorageKey, clientTransactionId.value);
+        } catch (error) {
+            // The in-memory id still protects retries until this page is closed.
+        }
         cart.value = [];
         discount.value = 0;
         customerId.value = '';
@@ -373,6 +399,7 @@ onBeforeUnmount(stopQrisTimer);
 
             <form ref="checkoutForm" method="post" enctype="multipart/form-data" :action="checkoutUrl" class="pos-checkout coop-checkout" @submit="validateCheckout">
                 <input type="hidden" name="_token" :value="csrfToken">
+                <input type="hidden" name="client_transaction_id" :value="clientTransactionId">
                 <template v-for="(item, index) in cart" :key="item.variant_id">
                     <input type="hidden" :name="`items[${index}][variant_id]`" :value="item.variant_id">
                     <input v-if="item.unit_id" type="hidden" :name="`items[${index}][unit_id]`" :value="item.unit_id">
